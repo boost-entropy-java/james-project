@@ -18,7 +18,6 @@
  ****************************************************************/
 package org.apache.james.imapserver.netty;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
@@ -31,11 +30,7 @@ import org.apache.james.imap.api.process.ImapLineHandler;
 import org.apache.james.imap.api.process.ImapSession;
 import org.apache.james.imap.api.process.SelectedMailbox;
 import org.apache.james.imap.encode.ImapResponseWriter;
-import org.apache.james.imap.encode.StatusResponseEncoder;
-import org.apache.james.imap.encode.base.ImapResponseComposerImpl;
-import org.apache.james.imap.encode.main.DefaultLocalizer;
 import org.apache.james.imap.message.Literal;
-import org.apache.james.imap.message.response.ImmutableStatusResponse;
 import org.apache.james.mailbox.MailboxSession;
 import org.apache.james.protocols.api.OidcSASLConfiguration;
 import org.apache.james.protocols.netty.Encryption;
@@ -98,6 +93,16 @@ public class NettyImapSession implements ImapSession, NettyConstants {
     @Override
     public SessionId sessionId() {
         return sessionId;
+    }
+
+    @Override
+    public void executeSafely(Runnable runnable) {
+        channel.eventLoop().execute(() -> {
+            channel.config().setAutoRead(false);
+            runnable.run();
+
+            channel.config().setAutoRead(true);
+        });
     }
 
     @Override
@@ -167,27 +172,17 @@ public class NettyImapSession implements ImapSession, NettyConstants {
     }
 
     @Override
-    public boolean startTLS(ImmutableStatusResponse statusResponse) {
+    public boolean startTLS(Runnable runnable) {
         if (!supportStartTLS()) {
             return false;
         }
-        channel.config().setAutoRead(false);
-        write(statusResponse);
-
-        channel.pipeline().addFirst(SSL_HANDLER, secure.sslHandler());
-        stopDetectingCommandInjection();
-        channel.config().setAutoRead(true);
+        executeSafely(() -> {
+            runnable.run();
+            channel.pipeline().addFirst(SSL_HANDLER, secure.sslHandler());
+            stopDetectingCommandInjection();
+        });
 
         return true;
-    }
-
-    private void write(ImmutableStatusResponse statusResponse) {
-        try {
-            new StatusResponseEncoder(new DefaultLocalizer()).encode(statusResponse,
-                new ImapResponseComposerImpl(new EventLoopImapResponseWriter(channel), BUFFER_SIZE));
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
     }
 
     public static class EventLoopImapResponseWriter implements ImapResponseWriter {
@@ -222,29 +217,28 @@ public class NettyImapSession implements ImapSession, NettyConstants {
     }
 
     @Override
-    public boolean startCompression(ImmutableStatusResponse response) {
+    public boolean startCompression(Runnable runnable) {
         if (!isCompressionSupported()) {
             return false;
         }
 
-        channel.config().setAutoRead(false);
-        write(response);
-        ZlibDecoder decoder = new JZlibDecoder(ZlibWrapper.NONE);
-        ZlibEncoder encoder = new JZlibEncoder(ZlibWrapper.NONE, 5);
+        executeSafely(() -> {
+            runnable.run();
+            ZlibDecoder decoder = new JZlibDecoder(ZlibWrapper.NONE);
+            ZlibEncoder encoder = new JZlibEncoder(ZlibWrapper.NONE, 5);
 
-        // Check if we have the SslHandler in the pipeline already
-        // if so we need to move the compress encoder and decoder
-        // behind it in the chain
-        // See JAMES-1186
-        if (channel.pipeline().get(SSL_HANDLER) == null) {
-            channel.pipeline().addFirst(ZLIB_DECODER, decoder);
-            channel.pipeline().addFirst(ZLIB_ENCODER, encoder);
-        } else {
-            channel.pipeline().addAfter(SSL_HANDLER, ZLIB_DECODER, decoder);
-            channel.pipeline().addAfter(SSL_HANDLER, ZLIB_ENCODER, encoder);
-        }
-
-        channel.config().setAutoRead(true);
+            // Check if we have the SslHandler in the pipeline already
+            // if so we need to move the compress encoder and decoder
+            // behind it in the chain
+            // See JAMES-1186
+            if (channel.pipeline().get(SSL_HANDLER) == null) {
+                channel.pipeline().addFirst(ZLIB_DECODER, decoder);
+                channel.pipeline().addFirst(ZLIB_ENCODER, encoder);
+            } else {
+                channel.pipeline().addAfter(SSL_HANDLER, ZLIB_DECODER, decoder);
+                channel.pipeline().addAfter(SSL_HANDLER, ZLIB_ENCODER, encoder);
+            }
+        });
 
         return true;
     }
