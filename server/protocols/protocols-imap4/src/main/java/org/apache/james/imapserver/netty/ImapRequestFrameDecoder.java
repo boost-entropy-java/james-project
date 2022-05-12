@@ -153,11 +153,6 @@ public class ImapRequestFrameDecoder extends ByteToMessageDecoder implements Net
 
         // SwitchableDelimiterBasedFrameDecoder added further to JAMES-1436.
         disableFraming(ctx);
-        if (in.readableBytes() > 0) {
-            ByteBuf spareBytes = in.retainedDuplicate();
-            internalBuffer().clear();
-            ctx.fireChannelRead(spareBytes);
-        }
         in.readerIndex(readerIndex);
     }
 
@@ -267,15 +262,13 @@ public class ImapRequestFrameDecoder extends ByteToMessageDecoder implements Net
     }
 
     public void disableFraming(ChannelHandlerContext ctx) {
-        if (framingEnabled.get()) {
+        if (framingEnabled.getAndSet(false)) {
             ctx.channel().pipeline().remove(FRAMER);
-            framingEnabled.set(false);
         }
     }
 
     public void enableFraming(ChannelHandlerContext ctx) {
-        if (!framingEnabled.get()) {
-            framingEnabled.set(true);
+        if (!framingEnabled.getAndSet(true)) {
             ctx.channel().pipeline().addBefore(REQUEST_DECODER, FRAMER,
                 new SwitchableLineBasedFrameDecoder(ctx.channel().pipeline(), maxFrameLength, false));
         }
