@@ -50,7 +50,7 @@ public class MimePartParser {
     private final TextExtractor textExtractor;
     private final MimeTokenStream stream;
     private final Deque<MimePartContainerBuilder> builderStack;
-    private MimePart result;
+    private MimePart.ParsedMimePart result;
     private MimePartContainerBuilder currentlyBuildMimePart;
 
     public MimePartParser(Message message, TextExtractor textExtractor) {
@@ -63,7 +63,7 @@ public class MimePartParser {
             new DefaultBodyDescriptorBuilder(null, FIELD_PARSER, DecodeMonitor.SILENT));
     }
 
-    public MimePart parse() throws IOException, MimeException {
+    public MimePart.ParsedMimePart parse() throws IOException, MimeException {
         stream.parse(message.getFullContent());
         for (EntityState state = stream.getState(); state != EntityState.T_END_OF_STREAM; state = stream.next()) {
             processMimePart(stream, state);
@@ -78,7 +78,7 @@ public class MimePartParser {
                 stackCurrent();
                 break;
             case T_START_HEADER:
-                currentlyBuildMimePart = MimePart.builder();
+                currentlyBuildMimePart = MimePart.builder(textExtractor::applicable);
                 break;
             case T_FIELD:
                 currentlyBuildMimePart.addToHeaders(stream.getField());
@@ -107,7 +107,7 @@ public class MimePartParser {
     }
     
     private void closeMimePart() {
-        MimePart bodyMimePart = currentlyBuildMimePart.using(textExtractor).build();
+        MimePart.ParsedMimePart bodyMimePart = currentlyBuildMimePart.build();
         if (!builderStack.isEmpty()) {
             builderStack.peek().addChild(bodyMimePart);
         } else {

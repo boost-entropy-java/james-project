@@ -23,8 +23,19 @@ import java.io.InputStream;
 
 import org.apache.james.mailbox.model.ContentType;
 
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
+
 public interface TextExtractor {
+    default boolean applicable(ContentType contentType) {
+        return true;
+    }
 
     ParsedContent extractContent(InputStream inputStream, ContentType contentType) throws Exception;
+
+    default Mono<ParsedContent> extractContentReactive(InputStream inputStream, ContentType contentType) {
+        return Mono.fromCallable(() -> extractContent(inputStream, contentType))
+            .subscribeOn(Schedulers.elastic());
+    }
 
 }

@@ -37,12 +37,23 @@ import org.jsoup.nodes.Document;
 
 import com.google.common.collect.ImmutableMap;
 
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
+
 public class JsoupTextExtractor implements TextExtractor {
     private static final String TITLE_HTML_TAG = "title";
     private static final String NO_BASE_URI = "";
     private static final Map<String, List<String>> EMPTY_METADATA = ImmutableMap.of();
     private static final MimeType TEXT_HTML = MimeType.of("text/html");
     private static final MimeType TEXT_PLAIN = MimeType.of("text/plain");
+
+    @Override
+    public boolean applicable(ContentType contentType) {
+        if (contentType == null) {
+            return false;
+        }
+        return contentType.mimeType().equals(TEXT_HTML) || contentType.mimeType().equals(TEXT_PLAIN);
+    }
 
     @Override
     public ParsedContent extractContent(InputStream inputStream, ContentType contentType) throws Exception {
@@ -57,6 +68,23 @@ public class JsoupTextExtractor implements TextExtractor {
             return parsePlainTextContent(inputStream, charset);
         }
         return ParsedContent.empty();
+    }
+
+    @Override
+    public Mono<ParsedContent> extractContentReactive(InputStream inputStream, ContentType contentType) {
+        if (inputStream == null || contentType == null) {
+            return Mono.just(ParsedContent.empty());
+        }
+        Charset charset = contentType.charset().orElse(StandardCharsets.UTF_8);
+        if (contentType.mimeType().equals(TEXT_HTML)) {
+            return Mono.fromCallable(() -> parseHtmlContent(inputStream, charset))
+                .subscribeOn(Schedulers.elastic());
+        }
+        if (contentType.mimeType().equals(TEXT_PLAIN)) {
+            return Mono.fromCallable(() -> parsePlainTextContent(inputStream, charset))
+                .subscribeOn(Schedulers.elastic());
+        }
+        return Mono.just(ParsedContent.empty());
     }
 
     private ParsedContent parsePlainTextContent(InputStream inputStream, Charset charset) throws IOException {

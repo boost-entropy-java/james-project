@@ -30,20 +30,38 @@ import org.apache.james.mailbox.extractor.ParsedContent;
 import org.apache.james.mailbox.extractor.TextExtractor;
 import org.apache.james.mailbox.model.ContentType;
 
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
+
 /**
  * A default text extractor that is directly based on the input file provided.
  * 
  * Costs less calculations that TikaTextExtractor, but result is not that good.
  */
 public class DefaultTextExtractor implements TextExtractor {
+    @Override
+    public boolean applicable(ContentType contentType) {
+        return contentType != null && contentType.asString().startsWith("text/");
+    }
 
     @Override
     public ParsedContent extractContent(InputStream inputStream, ContentType contentType) throws Exception {
-        if (contentType != null && contentType.asString().startsWith("text/")) {
+        if (applicable(contentType)) {
             Charset charset = contentType.charset().orElse(StandardCharsets.UTF_8);
             return new ParsedContent(Optional.ofNullable(IOUtils.toString(inputStream, charset)), new HashMap<>());
         } else {
             return new ParsedContent(Optional.empty(), new HashMap<>());
+        }
+    }
+
+    @Override
+    public Mono<ParsedContent> extractContentReactive(InputStream inputStream, ContentType contentType) {
+        if (applicable(contentType)) {
+            Charset charset = contentType.charset().orElse(StandardCharsets.UTF_8);
+            return Mono.fromCallable(() -> new ParsedContent(Optional.ofNullable(IOUtils.toString(inputStream, charset)), new HashMap<>()))
+                .subscribeOn(Schedulers.elastic());
+        } else {
+            return Mono.just(new ParsedContent(Optional.empty(), new HashMap<>()));
         }
     }
 }
