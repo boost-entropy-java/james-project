@@ -22,7 +22,7 @@ package org.apache.james.modules.mailbox;
 import static org.apache.james.mailbox.elasticsearch.v7.search.ElasticSearchSearcher.DEFAULT_SEARCH_SIZE;
 
 import java.io.FileNotFoundException;
-import java.io.IOException;
+import java.util.Set;
 
 import javax.inject.Inject;
 import javax.inject.Named;
@@ -46,15 +46,20 @@ import org.apache.james.mailbox.elasticsearch.v7.events.ElasticSearchListeningMe
 import org.apache.james.mailbox.elasticsearch.v7.query.QueryConverter;
 import org.apache.james.mailbox.elasticsearch.v7.search.ElasticSearchSearcher;
 import org.apache.james.mailbox.model.MailboxId;
-import org.apache.james.mailbox.model.MessageId;
 import org.apache.james.mailbox.store.search.ListeningMessageSearchIndex;
+import org.apache.james.mailbox.store.search.ListeningMessageSearchIndex.SearchOverride;
 import org.apache.james.mailbox.store.search.MessageSearchIndex;
+import org.apache.james.utils.ClassName;
+import org.apache.james.utils.GuiceGenericLoader;
 import org.apache.james.utils.InitializationOperation;
 import org.apache.james.utils.InitilizationOperationBuilder;
+import org.apache.james.utils.NamingScheme;
 import org.apache.james.utils.PropertiesProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.github.fge.lambdas.Throwing;
+import com.google.common.collect.ImmutableSet;
 import com.google.inject.AbstractModule;
 import com.google.inject.Provides;
 import com.google.inject.Scopes;
@@ -79,7 +84,7 @@ public class ElasticSearchMailboxModule extends AbstractModule {
             this.client = client;
         }
 
-        void createIndex() throws IOException {
+        void createIndex() {
             MailboxIndexCreationUtil.prepareClient(client,
                 mailboxConfiguration.getReadAliasMailboxName(),
                 mailboxConfiguration.getWriteAliasMailboxName(),
@@ -112,6 +117,16 @@ public class ElasticSearchMailboxModule extends AbstractModule {
     }
 
     @Provides
+    Set<SearchOverride> provideSearchOverrides(GuiceGenericLoader loader, ElasticSearchConfiguration configuration) {
+        return configuration.getSearchOverrides()
+            .stream()
+            .map(ClassName::new)
+            .map(Throwing.function(loader.<SearchOverride>withNamingSheme(NamingScheme.IDENTITY)::instantiate))
+            .peek(routes -> LOGGER.info("Loading Search override {}", routes.getClass().getCanonicalName()))
+            .collect(ImmutableSet.toImmutableSet());
+    }
+
+    @Provides
     @Singleton
     @Named(MailboxElasticSearchConstants.InjectionNames.MAILBOX)
     private ElasticSearchIndexer createMailboxElasticSearchIndexer(ReactorElasticSearchClient client,
@@ -125,8 +140,6 @@ public class ElasticSearchMailboxModule extends AbstractModule {
     @Singleton
     private ElasticSearchSearcher createMailboxElasticSearchSearcher(ReactorElasticSearchClient client,
                                                                      QueryConverter queryConverter,
-                                                                     MailboxId.Factory mailboxIdFactory,
-                                                                     MessageId.Factory messageIdFactory,
                                                                      ElasticSearchMailboxConfiguration configuration,
                                                                      RoutingKey.Factory<MailboxId> routingKeyFactory) {
         return new ElasticSearchSearcher(
