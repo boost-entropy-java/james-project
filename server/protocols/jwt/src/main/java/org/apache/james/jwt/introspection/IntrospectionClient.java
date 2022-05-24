@@ -17,27 +17,13 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.mailbox.store;
+package org.apache.james.jwt.introspection;
 
-import java.util.List;
+import org.reactivestreams.Publisher;
 
-import org.apache.james.mailbox.model.MessageMetaData;
+public interface IntrospectionClient {
 
-public class MoveResult {
+    Publisher<TokenIntrospectionResponse> introspect(IntrospectionEndpoint introspectionEndpoint, String token);
 
-    private final List<MessageMetaData> movedMessages;
-    private final List<MessageMetaData> originalMessages;
-
-    public MoveResult(List<MessageMetaData> movedMessages, List<MessageMetaData> originalMessages) {
-        this.movedMessages = movedMessages;
-        this.originalMessages = originalMessages;
-    }
-
-    public List<MessageMetaData> getMovedMessages() {
-        return movedMessages;
-    }
-
-    public List<MessageMetaData> getOriginalMessages() {
-        return originalMessages;
-    }
 }
+

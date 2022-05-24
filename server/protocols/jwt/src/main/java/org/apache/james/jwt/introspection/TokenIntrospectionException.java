@@ -17,27 +17,15 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.mailbox.store;
+package org.apache.james.jwt.introspection;
 
-import java.util.List;
+public class TokenIntrospectionException extends RuntimeException {
 
-import org.apache.james.mailbox.model.MessageMetaData;
-
-public class MoveResult {
-
-    private final List<MessageMetaData> movedMessages;
-    private final List<MessageMetaData> originalMessages;
-
-    public MoveResult(List<MessageMetaData> movedMessages, List<MessageMetaData> originalMessages) {
-        this.movedMessages = movedMessages;
-        this.originalMessages = originalMessages;
+    public TokenIntrospectionException(String message) {
+        super(message);
     }
 
-    public List<MessageMetaData> getMovedMessages() {
-        return movedMessages;
-    }
-
-    public List<MessageMetaData> getOriginalMessages() {
-        return originalMessages;
+    public TokenIntrospectionException(String message, Throwable cause) {
+        super(message, cause);
     }
 }

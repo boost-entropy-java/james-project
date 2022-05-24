@@ -17,27 +17,42 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.mailbox.store;
+package org.apache.james.jwt.introspection;
 
-import java.util.List;
+import java.net.URL;
+import java.util.Objects;
+import java.util.Optional;
 
-import org.apache.james.mailbox.model.MessageMetaData;
+public class IntrospectionEndpoint {
+    private final URL url;
+    private final Optional<String> authorizationHeader;
 
-public class MoveResult {
-
-    private final List<MessageMetaData> movedMessages;
-    private final List<MessageMetaData> originalMessages;
-
-    public MoveResult(List<MessageMetaData> movedMessages, List<MessageMetaData> originalMessages) {
-        this.movedMessages = movedMessages;
-        this.originalMessages = originalMessages;
+    public IntrospectionEndpoint(URL url, Optional<String> authorizationHeader) {
+        this.url = url;
+        this.authorizationHeader = authorizationHeader;
     }
 
-    public List<MessageMetaData> getMovedMessages() {
-        return movedMessages;
+    public URL getUrl() {
+        return url;
     }
 
-    public List<MessageMetaData> getOriginalMessages() {
-        return originalMessages;
+    public Optional<String> getAuthorizationHeader() {
+        return authorizationHeader;
+    }
+
+    @Override
+    public final boolean equals(Object o) {
+        if (o instanceof IntrospectionEndpoint) {
+            IntrospectionEndpoint that = (IntrospectionEndpoint) o;
+
+            return Objects.equals(this.url, that.url)
+                && Objects.equals(this.authorizationHeader, that.authorizationHeader);
+        }
+        return false;
+    }
+
+    @Override
+    public final int hashCode() {
+        return Objects.hash(url, authorizationHeader);
     }
 }
