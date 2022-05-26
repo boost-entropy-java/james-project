@@ -107,6 +107,7 @@ public class CassandraMessageMapper implements MessageMapper {
     private final CassandraConfiguration cassandraConfiguration;
     private final RecomputeMailboxCountersService recomputeMailboxCountersService;
     private final SecureRandom secureRandom;
+    private final int reactorConcurrency;
 
     public CassandraMessageMapper(UidProvider uidProvider, ModSeqProvider modSeqProvider,
                                   CassandraAttachmentMapper attachmentMapper,
@@ -133,6 +134,7 @@ public class CassandraMessageMapper implements MessageMapper {
         this.cassandraConfiguration = cassandraConfiguration;
         this.recomputeMailboxCountersService = recomputeMailboxCountersService;
         this.secureRandom = new SecureRandom();
+        this.reactorConcurrency = evaluateReactorConcurrency();
     }
 
     @Override
@@ -218,7 +220,7 @@ public class CassandraMessageMapper implements MessageMapper {
         CassandraId mailboxId = (CassandraId) composedMessageId.getMailboxId();
 
         return Flux.fromIterable(composedMessageIdWithMetaData)
-             .concatMap(this::delete)
+             .flatMap(this::delete, reactorConcurrency)
              .then(indexTableHandler.updateIndexOnDeleteComposedId(mailboxId, composedMessageIdWithMetaData));
     }
 
@@ -508,7 +510,7 @@ public class CassandraMessageMapper implements MessageMapper {
     private Mono<FlagsUpdateStageResult> runUpdateStage(CassandraId mailboxId, Flux<ComposedMessageIdWithMetaData> toBeUpdated, FlagsUpdateCalculator flagsUpdateCalculator) {
         return computeNewModSeq(mailboxId)
             .flatMapMany(newModSeq -> toBeUpdated
-            .concatMap(metadata -> tryFlagsUpdate(flagsUpdateCalculator, newModSeq, metadata)))
+            .flatMap(metadata -> tryFlagsUpdate(flagsUpdateCalculator, newModSeq, metadata), reactorConcurrency))
             .reduce(FlagsUpdateStageResult.none(), FlagsUpdateStageResult::merge)
             .flatMap(result -> updateIndexesForUpdatesResult(mailboxId, result));
     }
@@ -637,12 +639,11 @@ public class CassandraMessageMapper implements MessageMapper {
     }
 
     private Mono<Void> insertIds(Collection<MailboxMessage> messages, CassandraId mailboxId) {
-        int lowConcurrency = 4;
         return Flux.fromIterable(messages)
             .map(message -> computeId(message, mailboxId))
             .concatMap(id -> imapUidDAO.insert(id).thenReturn(id))
             .flatMap(id -> messageIdDAO.insert(id)
-                .retryWhen(Retry.backoff(MAX_RETRY, MIN_RETRY_BACKOFF).maxBackoff(MAX_RETRY_BACKOFF)), lowConcurrency)
+                .retryWhen(Retry.backoff(MAX_RETRY, MIN_RETRY_BACKOFF).maxBackoff(MAX_RETRY_BACKOFF)), reactorConcurrency)
             .then(indexTableHandler.updateIndexOnAdd(messages, mailboxId));
     }
 
@@ -706,5 +707,13 @@ public class CassandraMessageMapper implements MessageMapper {
                     return Mono.just(false);
                 }
             });
+    }
+
+    private int evaluateReactorConcurrency() {
+        if (cassandraConfiguration.isMessageWriteStrongConsistency()) {
+            // Prevent parallel execution to prevent CAS contention because of LightWeight transactions
+            return 1;
+        }
+        return 4;
     }
 }
