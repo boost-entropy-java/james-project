@@ -16,15 +16,20 @@
  * specific language governing permissions and limitations      *
  * under the License.                                           *
  ****************************************************************/
+package org.apache.james.modules.queue.rabbitmq;
 
-package org.apache.james.user.cassandra.tables;
+import javax.inject.Singleton;
 
-public interface CassandraUserTable {
-    String TABLE_NAME = "user";
+import org.apache.james.queue.rabbitmq.view.api.FakeMailQueueView;
+import org.apache.james.queue.rabbitmq.view.api.MailQueueView;
 
-    String ALGORITHM = "algorithm";
-    String NAME = "name";
-    String PASSWORD = "passwd";
-    String REALNAME = "realname";
-    String AUTHORIZED_USERS = "authorized_users";
+import com.google.inject.AbstractModule;
+import com.google.inject.Provides;
+
+public class FakeMailQueueViewModule extends AbstractModule {
+    @Provides
+    @Singleton
+    public MailQueueView.Factory provideMailQueueViewFactory() {
+        return new FakeMailQueueView.Factory();
+    }
 }
