@@ -17,7 +17,31 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.mailbox.exception;
+package org.apache.james.user.memory;
 
-public class NotAdminException extends MailboxException {
+import org.apache.commons.lang3.NotImplementedException;
+import org.apache.james.core.Username;
+import org.apache.james.user.api.DelegationStore;
+import org.reactivestreams.Publisher;
+
+public class NaiveDelegationStore implements DelegationStore {
+    @Override
+    public Publisher<Username> authorizedUsers(Username baseUser) {
+        throw new NotImplementedException();
+    }
+
+    @Override
+    public Publisher<Void> clear(Username baseUser) {
+        throw new NotImplementedException();
+    }
+
+    @Override
+    public Publisher<Void> addAuthorizedUser(Username baseUser, Username userWithAccess) {
+        throw new NotImplementedException();
+    }
+
+    @Override
+    public Publisher<Void> removeAuthorizedUser(Username baseUser, Username userWithAccess) {
+        throw new NotImplementedException();
+    }
 }

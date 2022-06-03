@@ -29,8 +29,10 @@ import java.util.stream.Stream;
 
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.james.blob.api.BlobStore.StoragePolicy;
+import org.apache.james.util.ReactorUtils;
 import org.reactivestreams.Publisher;
 
+import com.github.fge.lambdas.Throwing;
 import com.google.common.base.Optional;
 import com.google.common.hash.HashCode;
 import com.google.common.hash.HashFunction;
@@ -42,7 +44,6 @@ import com.google.common.io.FileBackedOutputStream;
 
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
 import reactor.util.function.Tuple2;
 
 public interface Store<T, I> {
@@ -103,19 +104,21 @@ public interface Store<T, I> {
         @Override
         public Mono<T> read(I blobIds) {
             return Flux.fromIterable(blobIds.asMap().entrySet())
-                .publishOn(Schedulers.elastic())
-                .collectMap(Map.Entry::getKey, entry -> readByteSource(bucketName, entry.getValue(), entry.getKey().getStoragePolicy()))
+                .publishOn(ReactorUtils.BLOCKING_CALL_WRAPPER)
+                .flatMap(entry -> readByteSource(bucketName, entry.getValue(), entry.getKey().getStoragePolicy())
+                    .map(result -> Pair.of(entry.getKey(), result)))
+                .collectMap(Map.Entry::getKey, Pair::getValue)
                 .map(decoder::decode);
         }
 
-        private CloseableByteSource readByteSource(BucketName bucketName, BlobId blobId, StoragePolicy storagePolicy) {
-            FileBackedOutputStream out = new FileBackedOutputStream(FILE_THRESHOLD);
-            try (InputStream in = blobStore.read(bucketName, blobId, storagePolicy)) {
-                in.transferTo(out);
-                return new DelegateCloseableByteSource(out.asByteSource(), out::reset);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
+        private Mono<CloseableByteSource> readByteSource(BucketName bucketName, BlobId blobId, StoragePolicy storagePolicy) {
+            return Mono.usingWhen(blobStore.readReactive(bucketName, blobId, storagePolicy),
+                Throwing.function(in -> {
+                    FileBackedOutputStream out = new FileBackedOutputStream(FILE_THRESHOLD);
+                    long size = in.transferTo(out);
+                    return Mono.just(new DelegateCloseableByteSource(out.asByteSource(), out::reset, size));
+                }),
+                stream -> Mono.fromRunnable(Throwing.runnable(stream::close)));
         }
 
         @Override
@@ -133,10 +136,12 @@ public interface Store<T, I> {
     class DelegateCloseableByteSource extends CloseableByteSource {
         private final ByteSource wrapped;
         private final Closeable closeable;
+        private final long size;
 
-        DelegateCloseableByteSource(ByteSource wrapped, Closeable closeable) {
+        DelegateCloseableByteSource(ByteSource wrapped, Closeable closeable, long size) {
             this.wrapped = wrapped;
             this.closeable = closeable;
+            this.size = size;
         }
 
         @Override
@@ -166,12 +171,12 @@ public interface Store<T, I> {
 
         @Override
         public Optional<Long> sizeIfKnown() {
-            return wrapped.sizeIfKnown();
+            return Optional.of(size);
         }
 
         @Override
-        public long size() throws IOException {
-            return wrapped.size();
+        public long size() {
+            return size;
         }
 
         @Override

@@ -17,21 +17,7 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.blob.cassandra.utils;
+package org.apache.james.mailbox.exception;
 
-import java.io.IOException;
-import java.io.PipedOutputStream;
-
-public class PipedOutputStreamHandlingError extends PipedOutputStream {
-    private final PipedInputStreamHandlingError pipedInputStream;
-
-    public PipedOutputStreamHandlingError(PipedInputStreamHandlingError snk) throws IOException {
-        super(snk);
-
-        this.pipedInputStream = snk;
-    }
-
-    public void propagateError(RuntimeException error) {
-        pipedInputStream.setError(error);
-    }
+public class ForbiddenDelegationException extends MailboxException {
 }

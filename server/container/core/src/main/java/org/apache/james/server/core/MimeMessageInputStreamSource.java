@@ -19,7 +19,10 @@
 
 package org.apache.james.server.core;
 
+import java.io.BufferedInputStream;
+import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -28,8 +31,6 @@ import java.util.Optional;
 import java.util.Set;
 
 import javax.mail.MessagingException;
-import javax.mail.util.SharedByteArrayInputStream;
-import javax.mail.util.SharedFileInputStream;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
@@ -187,14 +188,13 @@ public class MimeMessageInputStreamSource extends Disposable.LeakAware<MimeMessa
      */
     @Override
     public InputStream getInputStream() throws IOException {
-        InputStream in;
         if (getResource().getOut().isInMemory()) {
-            in = new SharedByteArrayInputStream(getResource().getOut().getData());
+            return new ByteArrayInputStream(getResource().getOut().getData());
         } else {
-            in = new SharedFileInputStream(getResource().getOut().getFile());
+            InputStream in = new BufferedInputStream(new FileInputStream(getResource().getOut().getFile()), 2048);
+            getResource().streams.add(in);
+            return in;
         }
-        getResource().streams.add(in);
-        return in;
     }
 
     /**

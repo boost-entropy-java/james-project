@@ -19,8 +19,10 @@
 package org.apache.james.modules.data;
 
 import org.apache.james.server.core.configuration.ConfigurationProvider;
+import org.apache.james.user.api.DelegationStore;
 import org.apache.james.user.api.UsersRepository;
 import org.apache.james.user.jpa.JPAUsersRepository;
+import org.apache.james.user.memory.NaiveDelegationStore;
 import org.apache.james.utils.InitializationOperation;
 import org.apache.james.utils.InitilizationOperationBuilder;
 
@@ -33,6 +35,7 @@ public class JPAUsersRepositoryModule extends AbstractModule {
     public void configure() {
         bind(JPAUsersRepository.class).in(Scopes.SINGLETON);
         bind(UsersRepository.class).to(JPAUsersRepository.class);
+        bind(DelegationStore.class).to(NaiveDelegationStore.class);
     }
 
     @ProvidesIntoSet

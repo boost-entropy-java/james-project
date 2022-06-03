@@ -19,10 +19,14 @@
 package org.apache.james.data;
 
 import org.apache.commons.configuration2.ex.ConfigurationException;
+import org.apache.james.adapter.mailbox.UserRepositoryAuthorizator;
+import org.apache.james.mailbox.Authorizator;
 import org.apache.james.server.core.configuration.ConfigurationProvider;
+import org.apache.james.user.api.DelegationStore;
 import org.apache.james.user.api.UsersRepository;
 import org.apache.james.user.ldap.LdapRepositoryConfiguration;
 import org.apache.james.user.ldap.ReadOnlyUsersLDAPRepository;
+import org.apache.james.user.memory.NaiveDelegationStore;
 import org.apache.james.utils.InitializationOperation;
 import org.apache.james.utils.InitilizationOperationBuilder;
 
@@ -37,6 +41,8 @@ public class LdapUsersRepositoryModule extends AbstractModule {
     public void configure() {
         bind(ReadOnlyUsersLDAPRepository.class).in(Scopes.SINGLETON);
         bind(UsersRepository.class).to(ReadOnlyUsersLDAPRepository.class);
+        bind(DelegationStore.class).to(NaiveDelegationStore.class);
+        bind(Authorizator.class).to(UserRepositoryAuthorizator.class);
     }
 
     @Provides

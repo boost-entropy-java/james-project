@@ -1021,7 +1021,7 @@ trait WebSocketContract {
                 t.payload
               })
               .timeout(scala.concurrent.duration.Duration.fromNanos(100000000), Some(SMono.just("No notification received")))
-              .subscribeOn(Schedulers.elastic())
+              .subscribeOn(Schedulers.boundedElastic())
               .block()
 
           List(response, maybeNotification)

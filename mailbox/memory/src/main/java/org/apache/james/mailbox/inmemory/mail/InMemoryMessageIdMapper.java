@@ -53,7 +53,6 @@ import com.google.common.collect.Multimap;
 
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
 
 public class InMemoryMessageIdMapper implements MessageIdMapper {
     private final MailboxMapper mailboxMapper;
@@ -137,19 +136,17 @@ public class InMemoryMessageIdMapper implements MessageIdMapper {
     @Override
     public Mono<Multimap<MailboxId, UpdatedFlags>> setFlags(MessageId messageId, List<MailboxId> mailboxIds,
                                                             Flags newState, FlagsUpdateMode updateMode) {
-        return Mono.<Multimap<MailboxId, UpdatedFlags>>fromCallable(() -> find(ImmutableList.of(messageId), MessageMapper.FetchType.METADATA)
-            .stream()
+        return findReactive(ImmutableList.of(messageId), MessageMapper.FetchType.METADATA)
             .filter(message -> mailboxIds.contains(message.getMailboxId()))
-            .map(updateMessage(newState, updateMode))
+            .concatMap(updateMessage(newState, updateMode))
             .distinct()
             .collect(ImmutableListMultimap.toImmutableListMultimap(
                 Pair::getKey,
-                Pair::getValue)))
-            .subscribeOn(Schedulers.elastic());
+                Pair::getValue));
     }
 
-    private Function<MailboxMessage, Pair<MailboxId, UpdatedFlags>> updateMessage(Flags newState, FlagsUpdateMode updateMode) {
-        return Throwing.function((MailboxMessage message) -> {
+    private Function<MailboxMessage, Mono<Pair<MailboxId, UpdatedFlags>>> updateMessage(Flags newState, FlagsUpdateMode updateMode) {
+        return (MailboxMessage message) -> {
             FlagsUpdateCalculator flagsUpdateCalculator = new FlagsUpdateCalculator(newState, updateMode);
             if (flagsUpdateCalculator.buildNewFlags(message.createFlags()).equals(message.createFlags())) {
                 UpdatedFlags updatedFlags = UpdatedFlags.builder()
@@ -159,14 +156,16 @@ public class InMemoryMessageIdMapper implements MessageIdMapper {
                     .oldFlags(message.createFlags())
                     .newFlags(newState)
                     .build();
-                return Pair.of(message.getMailboxId(), updatedFlags);
+                return Mono.just(Pair.of(message.getMailboxId(), updatedFlags));
             }
-            return Pair.of(message.getMailboxId(),
-                messageMapper.updateFlags(
-                    MailboxReactorUtils.block(mailboxMapper.findMailboxById(message.getMailboxId())),
+            return mailboxMapper.findMailboxById(message.getMailboxId())
+                .flatMap(mailboxId -> Mono.from(messageMapper.updateFlagsReactive(
+                    mailboxId,
                     flagsUpdateCalculator,
-                    message.getUid().toRange())
-                    .next());
-        });
+                    message.getUid().toRange()))
+                    .flatMapIterable(Function.identity())
+                    .next()
+                    .map(updatedFlags -> Pair.of(message.getMailboxId(), updatedFlags)));
+        };
     }
 }
