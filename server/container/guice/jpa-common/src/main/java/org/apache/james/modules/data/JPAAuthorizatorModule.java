@@ -1,4 +1,4 @@
- /***************************************************************
+/****************************************************************
  * Licensed to the Apache Software Foundation (ASF) under one   *
  * or more contributor license agreements.  See the NOTICE file *
  * distributed with this work for additional information        *
@@ -17,32 +17,19 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.task.eventsourcing
+package org.apache.james.modules.data;
 
-import org.apache.james.eventsourcing.{Event, ReactiveSubscriber}
-import org.reactivestreams.Publisher
-import reactor.core.publisher.Sinks.EmitFailureHandler.FAIL_FAST
-import reactor.core.publisher.{Mono, Sinks}
+import org.apache.james.adapter.mailbox.UserRepositoryAuthorizator;
+import org.apache.james.mailbox.Authorizator;
 
-trait TerminationSubscriber extends ReactiveSubscriber {
-  override def handleReactive(event: Event): Publisher[Void] = Mono.fromRunnable(() => handle(event))
+import com.google.inject.AbstractModule;
 
-  override def handle(event: Event): Unit = event match {
-    case event: TerminalTaskEvent => addEvent(event)
-    case _ =>
-  }
+public class JPAAuthorizatorModule extends AbstractModule {
 
-  def addEvent(event: Event): Unit
 
-  def listenEvents: Publisher[Event]
-}
+    @Override
+    protected void configure() {
+        bind(Authorizator.class).to(UserRepositoryAuthorizator.class);
+    }
 
-class MemoryTerminationSubscriber extends TerminationSubscriber {
-  private val events: Sinks.Many[Event] = Sinks.many().multicast().directBestEffort()
-
-  override def addEvent(event: Event): Unit =
-    events.emitNext(event, FAIL_FAST)
-
-  override def listenEvents: Publisher[Event] =
-    events.asFlux()
 }

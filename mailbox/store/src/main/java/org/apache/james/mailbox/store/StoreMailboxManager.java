@@ -250,6 +250,11 @@ public class StoreMailboxManager implements MailboxManager {
     }
 
     @Override
+    public MailboxSession loginAsOtherUser(Username thisUserId, Username otherUserId) throws MailboxException {
+        return sessionProvider.loginAsOtherUser(thisUserId, otherUserId);
+    }
+
+    @Override
     public void logout(MailboxSession session) {
         sessionProvider.logout(session);
     }
@@ -445,6 +450,19 @@ public class StoreMailboxManager implements MailboxManager {
                 return mailbox;
             }).sneakyThrow())
             .flatMap(mailbox -> doDeleteMailbox(mailboxMapper, mailbox, session))));
+    }
+
+    @Override
+    public Mono<Mailbox> deleteMailboxReactive(MailboxId mailboxId, MailboxSession session) {
+        LOGGER.info("deleteMailbox {}", mailboxId);
+        MailboxMapper mailboxMapper = mailboxSessionMapperFactory.getMailboxMapper(session);
+
+        return mailboxMapper.executeReactive(mailboxMapper.findMailboxById(mailboxId)
+            .map(Throwing.<Mailbox, Mailbox>function(mailbox -> {
+                assertIsOwner(session, mailbox.generateAssociatedPath());
+                return mailbox;
+            }).sneakyThrow())
+            .flatMap(mailbox -> doDeleteMailbox(mailboxMapper, mailbox, session)));
     }
 
     @Override
