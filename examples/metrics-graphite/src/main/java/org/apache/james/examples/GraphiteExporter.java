@@ -16,26 +16,36 @@
  * specific language governing permissions and limitations      *
  * under the License.                                           *
  ****************************************************************/
-package org.apache.james.rrt.api;
 
-import java.util.stream.Stream;
+package org.apache.james.examples;
 
-import org.apache.james.core.MailAddress;
-import org.apache.james.core.Username;
-import org.reactivestreams.Publisher;
+import java.net.InetSocketAddress;
+import java.util.concurrent.TimeUnit;
 
-public interface CanSendFrom {
+import javax.inject.Inject;
 
-    /**
-     * Indicate if the connectedUser can send a mail using the fromUser in the from clause.
-     */
-    boolean userCanSendFrom(Username connectedUser, Username fromUser);
+import org.apache.james.utils.UserDefinedStartable;
 
-    Publisher<Boolean> userCanSendFromReactive(Username connectedUser, Username fromUser);
+import com.codahale.metrics.MetricFilter;
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.graphite.Graphite;
+import com.codahale.metrics.graphite.GraphiteReporter;
 
-    /**
-     * For a given user, return all the addresses he can use in the from clause of an email.
-     */
-    Stream<MailAddress> allValidFromAddressesForUser(Username user) throws RecipientRewriteTable.ErrorMappingException, RecipientRewriteTableException;
+public class GraphiteExporter implements UserDefinedStartable {
+    private final MetricRegistry metricRegistry;
 
+    @Inject
+    public GraphiteExporter(MetricRegistry metricRegistry) {
+        this.metricRegistry = metricRegistry;
+    }
+
+    public void start() {
+        Graphite graphite = new Graphite(new InetSocketAddress("graphite", 2003));
+        GraphiteReporter reporter = GraphiteReporter.forRegistry(metricRegistry)
+            .convertRatesTo(TimeUnit.SECONDS)
+            .convertDurationsTo(TimeUnit.MILLISECONDS)
+            .filter(MetricFilter.ALL)
+            .build(graphite);
+        reporter.start(1, TimeUnit.SECONDS);
+    }
 }

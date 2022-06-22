@@ -16,26 +16,34 @@
  * specific language governing permissions and limitations      *
  * under the License.                                           *
  ****************************************************************/
-package org.apache.james.rrt.api;
 
-import java.util.stream.Stream;
+package org.apache.james;
 
-import org.apache.james.core.MailAddress;
-import org.apache.james.core.Username;
-import org.reactivestreams.Publisher;
+import static org.apache.james.data.UsersRepositoryModuleChooser.Implementation.DEFAULT;
+import static org.assertj.core.api.Assertions.assertThat;
 
-public interface CanSendFrom {
+import org.apache.james.utils.ClassName;
+import org.apache.james.utils.ExtensionConfiguration;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import org.testcontainers.shaded.com.google.common.collect.ImmutableList;
 
-    /**
-     * Indicate if the connectedUser can send a mail using the fromUser in the from clause.
-     */
-    boolean userCanSendFrom(Username connectedUser, Username fromUser);
+class UserStartableExtensionTest {
+    @RegisterExtension
+    static JamesServerExtension jamesServerExtension = new JamesServerBuilder<MemoryJamesConfiguration>(tmpDir ->
+        MemoryJamesConfiguration.builder()
+            .workingDirectory(tmpDir)
+            .configurationFromClasspath()
+            .usersRepository(DEFAULT)
+            .build())
+        .server(MemoryJamesServerMain::createServer)
+        .overrideServerModule(binder -> binder.bind(ExtensionConfiguration.class)
+            .toInstance(new ExtensionConfiguration(ImmutableList.of(), ImmutableList.of(new ClassName(MyStartable.class.getName())))))
+        .build();
 
-    Publisher<Boolean> userCanSendFromReactive(Username connectedUser, Username fromUser);
 
-    /**
-     * For a given user, return all the addresses he can use in the from clause of an email.
-     */
-    Stream<MailAddress> allValidFromAddressesForUser(Username user) throws RecipientRewriteTable.ErrorMappingException, RecipientRewriteTableException;
-
+    @Test
+    void customRoutesShouldBeBound() {
+        assertThat(MyStartable.isCalled()).isTrue();
+    }
 }

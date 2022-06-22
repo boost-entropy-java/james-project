@@ -16,26 +16,22 @@
  * specific language governing permissions and limitations      *
  * under the License.                                           *
  ****************************************************************/
-package org.apache.james.rrt.api;
 
-import java.util.stream.Stream;
+package org.apache.james;
 
-import org.apache.james.core.MailAddress;
-import org.apache.james.core.Username;
-import org.reactivestreams.Publisher;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-public interface CanSendFrom {
+import org.apache.james.utils.UserDefinedStartable;
 
-    /**
-     * Indicate if the connectedUser can send a mail using the fromUser in the from clause.
-     */
-    boolean userCanSendFrom(Username connectedUser, Username fromUser);
+public class MyStartable implements UserDefinedStartable {
+    private static final AtomicBoolean CALLED = new AtomicBoolean(false);
 
-    Publisher<Boolean> userCanSendFromReactive(Username connectedUser, Username fromUser);
+    public static boolean isCalled() {
+        return CALLED.get();
+    }
 
-    /**
-     * For a given user, return all the addresses he can use in the from clause of an email.
-     */
-    Stream<MailAddress> allValidFromAddressesForUser(Username user) throws RecipientRewriteTable.ErrorMappingException, RecipientRewriteTableException;
-
+    @Override
+    public void start() {
+        CALLED.getAndSet(true);
+    }
 }
