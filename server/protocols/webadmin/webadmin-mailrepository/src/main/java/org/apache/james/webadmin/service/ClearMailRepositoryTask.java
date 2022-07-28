@@ -31,8 +31,12 @@ import org.apache.james.mailrepository.api.MailRepositoryStore;
 import org.apache.james.task.Task;
 import org.apache.james.task.TaskExecutionDetails;
 import org.apache.james.task.TaskType;
+import org.reactivestreams.Publisher;
 
 import com.github.fge.lambdas.Throwing;
+
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 public class ClearMailRepositoryTask implements Task {
 
@@ -98,16 +102,16 @@ public class ClearMailRepositoryTask implements Task {
 
     private final MailRepositoryStore mailRepositoryStore;
     private final MailRepositoryPath mailRepositoryPath;
-    private final long initialCount;
+    private long initialCount = 0;
 
     public ClearMailRepositoryTask(MailRepositoryStore mailRepositoryStore, MailRepositoryPath path) {
         this.mailRepositoryStore = mailRepositoryStore;
         this.mailRepositoryPath = path;
-        this.initialCount = getRemainingSize();
     }
 
     @Override
     public Result run() {
+        initialCount = getRemainingSize().block();
         try {
             removeAllInAllRepositories();
             return Result.COMPLETED;
@@ -132,16 +136,17 @@ public class ClearMailRepositoryTask implements Task {
     }
 
     @Override
-    public Optional<TaskExecutionDetails.AdditionalInformation> details() {
-        return Optional.of(new AdditionalInformation(mailRepositoryPath, initialCount, getRemainingSize(), Clock.systemUTC().instant()));
+    public Publisher<Optional<TaskExecutionDetails.AdditionalInformation>> detailsReactive() {
+        return getRemainingSize()
+            .map(remainingSize -> new AdditionalInformation(mailRepositoryPath, initialCount, remainingSize, Clock.systemUTC().instant()))
+            .map(Optional::of);
     }
 
-    public long getRemainingSize() {
+    public Mono<Long> getRemainingSize() {
         try {
-            return mailRepositoryStore.getByPath(mailRepositoryPath)
-                .map(Throwing.function(MailRepository::size).sneakyThrow())
-                .mapToLong(Long::valueOf)
-                .sum();
+            return Flux.fromStream(mailRepositoryStore.getByPath(mailRepositoryPath))
+                .flatMap(MailRepository::sizeReactive)
+                .reduce(0L, Long::sum);
         } catch (MailRepositoryStore.MailRepositoryStoreException e) {
             throw new RuntimeException(e);
         }
