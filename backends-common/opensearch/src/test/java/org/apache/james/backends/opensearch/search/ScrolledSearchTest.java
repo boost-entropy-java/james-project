@@ -24,14 +24,18 @@ import static org.awaitility.Awaitility.await;
 
 import java.io.IOException;
 
-import org.apache.james.backends.opensearch.DockerElasticSearchExtension;
-import org.apache.james.backends.opensearch.ElasticSearchConfiguration;
+import org.apache.james.backends.opensearch.DockerOpenSearchExtension;
 import org.apache.james.backends.opensearch.IndexCreationFactory;
 import org.apache.james.backends.opensearch.IndexName;
-import org.apache.james.backends.opensearch.ReactorElasticSearchClient;
+import org.apache.james.backends.opensearch.OpenSearchConfiguration;
+import org.apache.james.backends.opensearch.ReactorOpenSearchClient;
 import org.apache.james.backends.opensearch.ReadAliasName;
 import org.awaitility.Durations;
 import org.awaitility.core.ConditionFactory;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.client.RequestOptions;
@@ -39,10 +43,6 @@ import org.opensearch.common.unit.TimeValue;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.RegisterExtension;
 
 class ScrolledSearchTest {
     private static final TimeValue TIMEOUT = TimeValue.timeValueMinutes(1);
@@ -54,17 +54,17 @@ class ScrolledSearchTest {
     private static final ConditionFactory WAIT_CONDITION = await().timeout(Durations.FIVE_SECONDS);
 
     @RegisterExtension
-    public DockerElasticSearchExtension elasticSearch = new DockerElasticSearchExtension();
-    private ReactorElasticSearchClient client;
+    public DockerOpenSearchExtension openSearch = new DockerOpenSearchExtension();
+    private ReactorOpenSearchClient client;
 
     @BeforeEach
     void setUp() {
-        client = elasticSearch.getDockerElasticSearch().clientProvider().get();
-        new IndexCreationFactory(ElasticSearchConfiguration.DEFAULT_CONFIGURATION)
+        client = openSearch.getDockerOpenSearch().clientProvider().get();
+        new IndexCreationFactory(OpenSearchConfiguration.DEFAULT_CONFIGURATION)
             .useIndex(INDEX_NAME)
             .addAlias(ALIAS_NAME)
             .createIndexAndAliases(client);
-        elasticSearch.awaitForElasticSearch();
+        openSearch.awaitForOpenSearch();
     }
 
     @AfterEach
@@ -93,7 +93,7 @@ class ScrolledSearchTest {
             RequestOptions.DEFAULT)
         .block();
 
-        elasticSearch.awaitForElasticSearch();
+        openSearch.awaitForOpenSearch();
         WAIT_CONDITION.untilAsserted(() -> hasIdsInIndex(client, id));
 
         SearchRequest searchRequest = new SearchRequest(INDEX_NAME.getValue())
@@ -123,7 +123,7 @@ class ScrolledSearchTest {
             RequestOptions.DEFAULT)
             .block();
 
-        elasticSearch.awaitForElasticSearch();
+        openSearch.awaitForOpenSearch();
         WAIT_CONDITION.untilAsserted(() -> hasIdsInIndex(client, id1, id2));
 
         SearchRequest searchRequest = new SearchRequest(INDEX_NAME.getValue())
@@ -160,7 +160,7 @@ class ScrolledSearchTest {
             RequestOptions.DEFAULT)
             .block();
 
-        elasticSearch.awaitForElasticSearch();
+        openSearch.awaitForOpenSearch();
         WAIT_CONDITION.untilAsserted(() -> hasIdsInIndex(client, id1, id2, id3));
 
         SearchRequest searchRequest = new SearchRequest(INDEX_NAME.getValue())
@@ -174,7 +174,7 @@ class ScrolledSearchTest {
             .containsOnly(id1, id2, id3);
     }
 
-    private void hasIdsInIndex(ReactorElasticSearchClient client, String... ids) {
+    private void hasIdsInIndex(ReactorOpenSearchClient client, String... ids) {
         SearchRequest searchRequest = new SearchRequest(INDEX_NAME.getValue())
             .scroll(TIMEOUT)
             .source(new SearchSourceBuilder()

@@ -54,16 +54,16 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 import reactor.util.retry.Retry;
 
-public class ClientProvider implements Provider<ReactorElasticSearchClient> {
+public class ClientProvider implements Provider<ReactorOpenSearchClient> {
 
     private static class HttpAsyncClientConfigurer {
 
         private static final TrustStrategy TRUST_ALL = (x509Certificates, authType) -> true;
         private static final HostnameVerifier ACCEPT_ANY_HOSTNAME = (hostname, sslSession) -> true;
 
-        private final ElasticSearchConfiguration configuration;
+        private final OpenSearchConfiguration configuration;
 
-        private HttpAsyncClientConfigurer(ElasticSearchConfiguration configuration) {
+        private HttpAsyncClientConfigurer(OpenSearchConfiguration configuration) {
             this.configuration = configuration;
         }
 
@@ -75,13 +75,13 @@ public class ClientProvider implements Provider<ReactorElasticSearchClient> {
             configuration.getMaxConnections().ifPresent(builder::setMaxConnTotal);
             configuration.getMaxConnectionsPerHost().ifPresent(builder::setMaxConnPerRoute);
 
-            builder.setThreadFactory(NamedThreadFactory.withName("ElasticSearch-driver"));
+            builder.setThreadFactory(NamedThreadFactory.withName("OpenSearch-driver"));
 
             return builder;
         }
 
         private void configureHostScheme(HttpAsyncClientBuilder builder) {
-            ElasticSearchConfiguration.HostScheme scheme = configuration.getHostScheme();
+            OpenSearchConfiguration.HostScheme scheme = configuration.getHostScheme();
 
             switch (scheme) {
                 case HTTP:
@@ -114,7 +114,7 @@ public class ClientProvider implements Provider<ReactorElasticSearchClient> {
 
             SSLContextBuilder sslContextBuilder = new SSLContextBuilder();
 
-            ElasticSearchConfiguration.SSLConfiguration.SSLValidationStrategy strategy = configuration.getSslConfiguration()
+            OpenSearchConfiguration.SSLConfiguration.SSLValidationStrategy strategy = configuration.getSslConfiguration()
                 .getStrategy();
 
             switch (strategy) {
@@ -133,7 +133,7 @@ public class ClientProvider implements Provider<ReactorElasticSearchClient> {
         }
 
         private HostnameVerifier hostnameVerifier() {
-            ElasticSearchConfiguration.SSLConfiguration.HostNameVerifier hostnameVerifier = configuration.getSslConfiguration()
+            OpenSearchConfiguration.SSLConfiguration.HostNameVerifier hostnameVerifier = configuration.getSslConfiguration()
                 .getHostNameVerifier();
 
             switch (hostnameVerifier) {
@@ -158,7 +158,7 @@ public class ClientProvider implements Provider<ReactorElasticSearchClient> {
         private SSLContextBuilder applyTrustStore(SSLContextBuilder sslContextBuilder) throws CertificateException, NoSuchAlgorithmException,
             KeyStoreException, IOException {
 
-            ElasticSearchConfiguration.SSLConfiguration.SSLTrustStore trustStore = configuration.getSslConfiguration()
+            OpenSearchConfiguration.SSLConfiguration.SSLTrustStore trustStore = configuration.getSslConfiguration()
                 .getTrustStore()
                 .orElseThrow(() -> new IllegalStateException("SSLTrustStore cannot to be empty"));
 
@@ -180,32 +180,32 @@ public class ClientProvider implements Provider<ReactorElasticSearchClient> {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ClientProvider.class);
 
-    private final ElasticSearchConfiguration configuration;
-    private final RestHighLevelClient elasticSearchRestHighLevelClient;
+    private final OpenSearchConfiguration configuration;
+    private final RestHighLevelClient openSearchRestHighLevelClient;
     private final HttpAsyncClientConfigurer httpAsyncClientConfigurer;
-    private final ReactorElasticSearchClient client;
+    private final ReactorOpenSearchClient client;
 
     @Inject
-    public ClientProvider(ElasticSearchConfiguration configuration) {
+    public ClientProvider(OpenSearchConfiguration configuration) {
         this.httpAsyncClientConfigurer = new HttpAsyncClientConfigurer(configuration);
         this.configuration = configuration;
-        this.elasticSearchRestHighLevelClient = connect(configuration);
-        this.client = new ReactorElasticSearchClient(this.elasticSearchRestHighLevelClient);
+        this.openSearchRestHighLevelClient = connect(configuration);
+        this.client = new ReactorOpenSearchClient(this.openSearchRestHighLevelClient);
     }
 
-    private RestHighLevelClient connect(ElasticSearchConfiguration configuration) {
+    private RestHighLevelClient connect(OpenSearchConfiguration configuration) {
         Duration waitDelay = Duration.ofMillis(configuration.getMinDelay());
         boolean suppressLeadingZeroElements = true;
         boolean suppressTrailingZeroElements = true;
-        return Mono.fromCallable(() -> connectToCluster(configuration))
-            .doOnError(e -> LOGGER.warn("Error establishing ElasticSearch connection. Next retry scheduled in {}",
+        return Mono.fromCallable(this::connectToCluster)
+            .doOnError(e -> LOGGER.warn("Error establishing OpenSearch connection. Next retry scheduled in {}",
                 DurationFormatUtils.formatDurationWords(waitDelay.toMillis(), suppressLeadingZeroElements, suppressTrailingZeroElements), e))
             .retryWhen(Retry.backoff(configuration.getMaxRetries(), waitDelay).scheduler(Schedulers.boundedElastic()))
             .block();
     }
 
-    private RestHighLevelClient connectToCluster(ElasticSearchConfiguration configuration) {
-        LOGGER.info("Trying to connect to ElasticSearch service at {}", LocalDateTime.now());
+    private RestHighLevelClient connectToCluster() {
+        LOGGER.info("Trying to connect to OpenSearch service at {}", LocalDateTime.now());
 
         return new RestHighLevelClient(
             RestClient
@@ -220,12 +220,12 @@ public class ClientProvider implements Provider<ReactorElasticSearchClient> {
     }
 
     @Override
-    public ReactorElasticSearchClient get() {
+    public ReactorOpenSearchClient get() {
         return client;
     }
 
     @PreDestroy
     public void close() throws IOException {
-        elasticSearchRestHighLevelClient.close();
+        openSearchRestHighLevelClient.close();
     }
 }

@@ -33,6 +33,8 @@
     <inceptionYear>2018</inceptionYear>
 
     <modules>
+        <module>clamav</module>
+        <module>elasticsearch</module>
         <module>linshare</module>
         <module>rspamd</module>
         <module>spamassassin</module>

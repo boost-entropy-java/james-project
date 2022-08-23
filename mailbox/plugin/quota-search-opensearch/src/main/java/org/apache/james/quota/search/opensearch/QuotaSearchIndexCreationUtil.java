@@ -22,18 +22,18 @@ package org.apache.james.quota.search.opensearch;
 import java.io.IOException;
 
 import org.apache.james.backends.opensearch.AliasName;
-import org.apache.james.backends.opensearch.ElasticSearchConfiguration;
 import org.apache.james.backends.opensearch.IndexCreationFactory;
 import org.apache.james.backends.opensearch.IndexName;
-import org.apache.james.backends.opensearch.ReactorElasticSearchClient;
+import org.apache.james.backends.opensearch.OpenSearchConfiguration;
+import org.apache.james.backends.opensearch.ReactorOpenSearchClient;
 
 public class QuotaSearchIndexCreationUtil {
 
-    public static ReactorElasticSearchClient prepareClient(ReactorElasticSearchClient client,
-                                       AliasName readAlias,
-                                       AliasName writeAlias,
-                                       IndexName indexName,
-                                       ElasticSearchConfiguration configuration) {
+    public static ReactorOpenSearchClient prepareClient(ReactorOpenSearchClient client,
+                                                        AliasName readAlias,
+                                                        AliasName writeAlias,
+                                                        IndexName indexName,
+                                                        OpenSearchConfiguration configuration) {
         return new IndexCreationFactory(configuration)
             .useIndex(indexName)
             .addAlias(readAlias)
@@ -41,11 +41,11 @@ public class QuotaSearchIndexCreationUtil {
             .createIndexAndAliases(client, QuotaRatioMappingFactory.getMappingContent());
     }
 
-    public static ReactorElasticSearchClient prepareDefaultClient(ReactorElasticSearchClient client, ElasticSearchConfiguration configuration) throws IOException {
+    public static ReactorOpenSearchClient prepareDefaultClient(ReactorOpenSearchClient client, OpenSearchConfiguration configuration) throws IOException {
         return prepareClient(client,
-            QuotaRatioElasticSearchConstants.DEFAULT_QUOTA_RATIO_READ_ALIAS,
-            QuotaRatioElasticSearchConstants.DEFAULT_QUOTA_RATIO_WRITE_ALIAS,
-            QuotaRatioElasticSearchConstants.DEFAULT_QUOTA_RATIO_INDEX,
+            QuotaRatioOpenSearchConstants.DEFAULT_QUOTA_RATIO_READ_ALIAS,
+            QuotaRatioOpenSearchConstants.DEFAULT_QUOTA_RATIO_WRITE_ALIAS,
+            QuotaRatioOpenSearchConstants.DEFAULT_QUOTA_RATIO_INDEX,
             configuration);
     }
 }
