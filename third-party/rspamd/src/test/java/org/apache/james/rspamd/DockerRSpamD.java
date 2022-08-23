@@ -19,6 +19,8 @@
 
 package org.apache.james.rspamd;
 
+import java.util.stream.Stream;
+
 import org.apache.james.rate.limiter.DockerRedis;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.Network;
@@ -43,6 +45,10 @@ public class DockerRSpamD {
         this.container = createRspamD();
     }
 
+    public boolean isRunning() {
+        return container.isRunning();
+    }
+
     private GenericContainer<?> createRspamD() {
         return new GenericContainer<>(DEFAULT_IMAGE_NAME.withTag(DEFAULT_TAG))
             .withExposedPorts(DEFAULT_PORT)
@@ -59,17 +65,13 @@ public class DockerRSpamD {
     }
 
     public void start() {
-        dockerClamAV.start();
-        dockerRedis.start();
+        Stream.<Runnable>of(dockerClamAV::start, dockerRedis::start)
+            .parallel()
+            .forEach(Runnable::run);
+
         if (!container.isRunning()) {
             container.start();
         }
-    }
-
-    public void stop() {
-        container.stop();
-        dockerRedis.stop();
-        dockerClamAV.stop();
     }
 
     public void flushAll() {

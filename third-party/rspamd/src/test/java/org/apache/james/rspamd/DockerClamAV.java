@@ -33,21 +33,15 @@ public class DockerClamAV {
     public DockerClamAV(Network network) {
         this.container = new GenericContainer<>(DEFAULT_IMAGE_NAME.withTag(DEFAULT_TAG))
             .withExposedPorts(DEFAULT_PORT)
+            .withEnv("CLAMAV_NO_FRESHCLAMD", "true")
+            .withEnv("CLAMAV_NO_MILTERD", "true")
             .withNetwork(network)
             .withNetworkAliases("clamav");
-    }
-
-    public Integer getPort() {
-        return container.getMappedPort(DEFAULT_PORT);
     }
 
     public void start() {
         if (!container.isRunning()) {
             container.start();
         }
-    }
-
-    public void stop() {
-        container.stop();
     }
 }
