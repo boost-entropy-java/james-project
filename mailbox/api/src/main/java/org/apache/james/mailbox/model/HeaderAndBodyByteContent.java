@@ -17,44 +17,34 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.spamassassin.module;
+package org.apache.james.mailbox.model;
 
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.io.SequenceInputStream;
 
-import java.util.Optional;
+public final class HeaderAndBodyByteContent implements Content {
 
-import org.apache.james.GuiceModuleTestExtension;
-import org.apache.james.spamassassin.SpamAssassinExtension;
-import org.junit.jupiter.api.extension.ExtensionContext;
-import org.junit.jupiter.api.extension.ParameterContext;
-import org.junit.jupiter.api.extension.ParameterResolutionException;
+    private final byte[] headers;
+    private final byte[] body;
 
-import com.google.inject.Module;
+    private final long size;
 
-public class SpamAssassinModuleExtension implements GuiceModuleTestExtension {
-
-    private final SpamAssassinExtension spamAssassin;
-
-    public SpamAssassinModuleExtension() {
-        this.spamAssassin = new SpamAssassinExtension();
+    public HeaderAndBodyByteContent(byte[] headers, byte[] body) {
+        this.headers = headers;
+        this.body = body;
+        size = (long) headers.length + (long) body.length;
     }
 
     @Override
-    public void beforeAll(ExtensionContext extensionContext) {
-        spamAssassin.beforeAll(extensionContext);
+    public long size() {
+        return size;
     }
 
     @Override
-    public Module getModule() {
-        return new SpamAssassinTestModule(spamAssassin);
-    }
-
-    @Override
-    public Optional<Class<?>> supportedParameterClass() {
-        return Optional.of(SpamAssassinExtension.SpamAssassin.class);
-    }
-
-    @Override
-    public Object resolveParameter(ParameterContext parameterContext, ExtensionContext extensionContext) throws ParameterResolutionException {
-        return spamAssassin.getSpamAssassin();
+    public InputStream getInputStream() {
+        return new SequenceInputStream(
+            new ByteArrayInputStream(headers),
+            new ByteArrayInputStream(body));
     }
 }

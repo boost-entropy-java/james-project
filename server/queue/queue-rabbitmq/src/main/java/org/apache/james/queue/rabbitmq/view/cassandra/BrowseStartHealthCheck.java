@@ -17,31 +17,34 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.queue.activemq;
+package org.apache.james.queue.rabbitmq.view.cassandra;
+
+import java.time.Clock;
+import java.time.Duration;
 
 import javax.inject.Inject;
-import javax.jms.Connection;
-import javax.jms.ConnectionFactory;
-import javax.jms.Session;
 
+import org.apache.commons.lang3.tuple.Pair;
 import org.apache.james.core.healthcheck.ComponentName;
 import org.apache.james.core.healthcheck.HealthCheck;
 import org.apache.james.core.healthcheck.Result;
 import org.reactivestreams.Publisher;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import com.google.common.collect.ImmutableList;
 
 import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
 
-public class ActiveMQHealthCheck implements HealthCheck {
-    public static final Logger LOGGER = LoggerFactory.getLogger(ActiveMQHealthCheck.class);
-    public static final ComponentName COMPONENT_NAME = new ComponentName("Embedded ActiveMQ");
-    private final ConnectionFactory connectionFactory;
+public class BrowseStartHealthCheck implements HealthCheck {
+    private static final ComponentName COMPONENT_NAME = new ComponentName("RabbitMQMailQueue BrowseStart");
+    private static final Duration GRACE_PERIOD = Duration.ofDays(7);
+
+    private final BrowseStartDAO browseStartDAO;
+    private final Clock clock;
 
     @Inject
-    public ActiveMQHealthCheck(ConnectionFactory connectionFactory) {
-        this.connectionFactory = connectionFactory;
+    public BrowseStartHealthCheck(BrowseStartDAO browseStartDAO, Clock clock) {
+        this.browseStartDAO = browseStartDAO;
+        this.clock = clock;
     }
 
     @Override
@@ -51,17 +54,16 @@ public class ActiveMQHealthCheck implements HealthCheck {
 
     @Override
     public Publisher<Result> check() {
-        return Mono.fromCallable(() -> {
-            try {
-                Connection connection = connectionFactory.createConnection();
-                Session session = connection.createSession(true, Session.SESSION_TRANSACTED);
-                session.close();
-                return Result.healthy(COMPONENT_NAME);
-            } catch (Exception e) {
-                LOGGER.warn("{} is unhealthy. {}", COMPONENT_NAME.getName(), e.getMessage());
-                return Result.unhealthy(COMPONENT_NAME, e.getMessage());
-            }
-        }).subscribeOn(Schedulers.boundedElastic());
+        return browseStartDAO.listAll()
+            .filter(pair -> pair.getValue().isBefore(clock.instant().minus(GRACE_PERIOD)))
+            .map(Pair::getKey)
+            .collect(ImmutableList.toImmutableList())
+            .filter(list -> !list.isEmpty())
+            .map(tooOldBrowseStart -> Result.degraded(COMPONENT_NAME, String.format("The following mail queues %s have out of date browse starts (older than 7 days)" +
+                " which can cause performance issues. We recommend auditing the mail queue content, and resuming the delivery of oldest items, which would " +
+                "allow browse start updates to take place correctly again.", tooOldBrowseStart.toString())))
+            .switchIfEmpty(Mono.just(Result.healthy(COMPONENT_NAME)))
+            .onErrorResume(e -> Mono.just(
+                Result.unhealthy(COMPONENT_NAME, "Error while checking browse start", e)));
     }
 }
-
