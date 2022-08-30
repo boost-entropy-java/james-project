@@ -24,6 +24,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.io.InputStream;
 import java.util.Collection;
 import java.util.Optional;
 
@@ -140,6 +141,9 @@ class RspamdScannerTest {
             .mimeMessage(mimeMessage)
             .build();
 
+        mailet.init(FakeMailetConfig.builder()
+            .setProperty("rewriteSubject", "true")
+            .build());
         mailet.service(mail);
 
 
@@ -220,6 +224,104 @@ class RspamdScannerTest {
         mailet.service(mail);
 
         assertThat(mail.getMessage().getSubject()).isEqualTo(REWRITE_SUBJECT);
+    }
+
+    @Test
+    void serviceShouldMoveRejetedEmailToTheSpamProcessor() throws Exception {
+        RspamdHttpClient rspamdHttpClient = mock(RspamdHttpClient.class);
+        when(rspamdHttpClient.checkV2(any(Mail.class))).thenReturn(Mono.just(AnalysisResult.builder()
+                .action(AnalysisResult.Action.REJECT)
+                .score(12.1F)
+                .requiredScore(14F)
+            .build()));
+
+        FakeMailetConfig mailetConfig = FakeMailetConfig.builder()
+            .setProperty("rejectSpamProcessor", "spam")
+            .build();
+
+        mailet = new RspamdScanner(rspamdHttpClient);
+
+        Mail mail = FakeMail.builder()
+            .name("name")
+            .state("initial")
+            .recipient("user1@exemple.com")
+            .mimeMessage(MimeMessageBuilder.mimeMessageBuilder()
+                .addToRecipient("user1@exemple.com")
+                .addFrom("sender@exemple.com")
+                .setSubject(INIT_SUBJECT)
+                .setText("Please!")
+                .build())
+            .build();
+
+        mailet.init(mailetConfig);
+        mailet.service(mail);
+
+        assertThat(mail.getState()).isEqualTo("spam");
+    }
+
+    @Test
+    void serviceShouldNotMoveRejetedEmailWhenNoSpamProcessor() throws Exception {
+        RspamdHttpClient rspamdHttpClient = mock(RspamdHttpClient.class);
+        when(rspamdHttpClient.checkV2(any(Mail.class))).thenReturn(Mono.just(AnalysisResult.builder()
+                .action(AnalysisResult.Action.REJECT)
+                .score(12.1F)
+                .requiredScore(14F)
+            .build()));
+
+        FakeMailetConfig mailetConfig = FakeMailetConfig.builder()
+            .build();
+
+        mailet = new RspamdScanner(rspamdHttpClient);
+
+        Mail mail = FakeMail.builder()
+            .name("name")
+            .state("initial")
+            .recipient("user1@exemple.com")
+            .mimeMessage(MimeMessageBuilder.mimeMessageBuilder()
+                .addToRecipient("user1@exemple.com")
+                .addFrom("sender@exemple.com")
+                .setSubject(INIT_SUBJECT)
+                .setText("Please!")
+                .build())
+            .build();
+
+        mailet.init(mailetConfig);
+        mailet.service(mail);
+
+        assertThat(mail.getState()).isEqualTo("initial");
+    }
+
+    @Test
+    void serviceShouldNotMoveLegitimateEmailToSpamProcessor() throws Exception {
+        RspamdHttpClient rspamdHttpClient = mock(RspamdHttpClient.class);
+        when(rspamdHttpClient.checkV2(any(Mail.class))).thenReturn(Mono.just(AnalysisResult.builder()
+                .action(AnalysisResult.Action.ADD_HEADER)
+                .score(12.1F)
+                .requiredScore(14F)
+            .build()));
+
+        FakeMailetConfig mailetConfig = FakeMailetConfig.builder()
+            .setProperty("rejectSpamProcessor", "spam")
+            .build();
+        
+        mailet = new RspamdScanner(rspamdHttpClient);
+
+        Mail mail = FakeMail.builder()
+            .name("name")
+            .state("initial")
+            .recipient("user1@exemple.com")
+            .mimeMessage(MimeMessageBuilder.mimeMessageBuilder()
+                .addToRecipient("user1@exemple.com")
+                .addFrom("sender@exemple.com")
+                .setSubject(INIT_SUBJECT)
+                .setText("Please!")
+                .build())
+            .build();
+
+        mailet.init(mailetConfig);
+        mailet.service(mail);
+
+        assertThat(mail.getState()).isEqualTo("initial");
     }
 
     @Test
