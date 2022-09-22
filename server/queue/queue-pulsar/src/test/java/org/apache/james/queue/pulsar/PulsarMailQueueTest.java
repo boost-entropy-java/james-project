@@ -22,6 +22,7 @@ package org.apache.james.queue.pulsar;
 import static org.apache.james.queue.api.Mails.defaultMail;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -33,6 +34,7 @@ import javax.mail.internet.MimeMessage;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.james.backends.pulsar.DockerPulsarExtension;
 import org.apache.james.backends.pulsar.PulsarConfiguration;
+import org.apache.james.blob.api.BlobId;
 import org.apache.james.blob.api.BucketName;
 import org.apache.james.blob.api.HashBlobId;
 import org.apache.james.blob.api.Store;
@@ -61,6 +63,7 @@ import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.reactivestreams.Publisher;
 
 import com.github.fge.lambdas.Throwing;
 import com.sksamuel.pulsar4s.ConsumerMessage;
@@ -73,6 +76,7 @@ import scala.jdk.javaapi.OptionConverters;
 @ExtendWith(DockerPulsarExtension.class)
 public class PulsarMailQueueTest implements MailQueueContract, MailQueueMetricContract, ManageableMailQueueContract, DelayedMailQueueContract, DelayedManageableMailQueueContract {
 
+    int MAX_CONCURRENCY = 10;
     PulsarMailQueue mailQueue;
 
     private HashBlobId.Factory blobIdFactory;
@@ -80,7 +84,7 @@ public class PulsarMailQueueTest implements MailQueueContract, MailQueueMetricCo
     private MailQueueItemDecoratorFactory factory;
     private MailQueueName mailQueueName;
     private MailQueueMetricExtension.MailQueueMetricTestSystem metricTestSystem;
-    private PulsarConfiguration config;
+    private PulsarConfiguration pulsarConfiguration;
     private ActorSystem system;
     private MemoryBlobStoreDAO memoryBlobStore;
 
@@ -120,15 +124,21 @@ public class PulsarMailQueueTest implements MailQueueContract, MailQueueMetricCo
     }
 
     @Override
+    public int getMailQueueMaxConcurrency() {
+        return MAX_CONCURRENCY;
+    }
+
+    @Override
     public ManageableMailQueue getManageableMailQueue() {
         return mailQueue;
     }
 
     public PulsarMailQueue newInstance(DockerPulsarExtension.DockerPulsar pulsar) {
-        config = pulsar.getConfiguration();
+        pulsarConfiguration = pulsar.getConfiguration();
+        int enqueueBufferSize = 10;
+        int requeueBufferSize = 10;
         return new PulsarMailQueue(
-                mailQueueName,
-                config,
+                new PulsarMailQueueConfiguration(mailQueueName, pulsarConfiguration, MAX_CONCURRENCY, enqueueBufferSize, requeueBufferSize),
                 blobIdFactory,
                 mimeMessageStore,
                 factory,
@@ -173,25 +183,6 @@ public class PulsarMailQueueTest implements MailQueueContract, MailQueueMetricCo
                         .consumeOne())
                 .map(ConsumerMessage::value);
         assertThat(deadletterMessage).contains("BAD");
-    }
-
-    @Test
-    // JAMES-3805 PulsarMailQueueTest.dequeueShouldBeConcurrent is unstable
-    // java.lang.IllegalStateException: Too many concurrent offers. Specified maximum is 1. You have to wait for one previous future to be resolved to send another request
-    //    at akka.stream.impl.QueueSource$$anon$1.bufferElem(QueueSource.scala:115)
-    @Tag(Unstable.TAG)
-    @Override
-    public void dequeueShouldBeConcurrent() {
-        MailQueueMetricContract.super.dequeueShouldBeConcurrent();
-    }
-
-    @Test
-    // JAMES-3808 PulsarMailQueueTest::clearShouldNotFailWhenBrowsingIterating is unstable
-    // org.apache.pulsar.client.admin.PulsarAdminException$ServerSideErrorException: HTTP 500 Internal Server Error
-    @Tag(Unstable.TAG)
-    @Override
-    public void clearShouldNotFailWhenBrowsingIterating() {
-        MailQueueMetricContract.super.dequeueShouldBeConcurrent();
     }
 
     @Test
@@ -260,8 +251,6 @@ public class PulsarMailQueueTest implements MailQueueContract, MailQueueMetricCo
         Awaitility.await().untilAsserted(this::assertThatStoreIsEmpty);
     }
 
-    @Disabled("JAMES-3805 PulsarMailQueueTest::removeShouldRemoveMailFromStoreWhenFilteredOut is unstable")
-    // https://ci-builds.apache.org/job/james/job/ApacheJames/job/PR-1109/12/testReport/junit/org.apache.james.queue.pulsar/PulsarMailQueueTest/removeShouldRemoveMailFromStoreWhenFilteredOut/
     @Test
     void removeShouldRemoveMailFromStoreWhenFilteredOut() throws Exception {
         enQueue(defaultMail()
@@ -270,7 +259,11 @@ public class PulsarMailQueueTest implements MailQueueContract, MailQueueMetricCo
         enQueue(defaultMail()
                 .name("name2")
                 .build());
+        enQueue(defaultMail()
+                .name("name3")
+                .build());
 
+        //this won't delete the mail from the store until we try a dequeue
         getManageableMailQueue().remove(ManageableMailQueue.Type.Name, "name2");
 
         awaitRemove();
@@ -279,10 +272,9 @@ public class PulsarMailQueueTest implements MailQueueContract, MailQueueMetricCo
                 .toIterable()
                 .extracting(ManageableMailQueue.MailQueueItemView::getMail)
                 .extracting(Mail::getName)
-                .containsExactly("name1");
+                .containsExactly("name1", "name3");
 
-        MailQueue.MailQueueItem mailQueueItem = Flux.from(getMailQueue().deQueue()).blockFirst();
-        mailQueueItem.done(true);
+        Flux.from(getMailQueue().deQueue()).take(2).doOnNext(Throwing.consumer(x -> x.done(true))).blockLast();
         Awaitility.await().untilAsserted(this::assertThatStoreIsEmpty);
     }
 

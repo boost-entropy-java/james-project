@@ -51,7 +51,7 @@ public class DockerPulsarExtension implements
     private DockerPulsar dockerPulsar;
 
     public DockerPulsarExtension() {
-        container = new PulsarContainer("2.9.1")
+        container = new PulsarContainer("2.10.1")
                 .withLogConsumer(DockerPulsarExtension::displayDockerLog)
                 .waitingFor(
                         new WaitAllStrategy()
@@ -65,8 +65,10 @@ public class DockerPulsarExtension implements
     }
 
     PulsarConfiguration pulsarConfiguration() {
-        return new PulsarConfiguration(container.getPulsarBrokerUrl(),
-                container.getHttpServiceUrl(), new Namespace("public/" + RandomStringUtils.randomAlphabetic(10)));
+        return new PulsarConfiguration(
+            container.getPulsarBrokerUrl(),
+            container.getHttpServiceUrl(),
+            new Namespace("public/" + RandomStringUtils.randomAlphabetic(10)));
     }
 
     public PulsarConfiguration getConfiguration() {
