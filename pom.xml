@@ -597,7 +597,7 @@
 
         <james.groupId>org.apache.james</james.groupId>
         <james.protocols.groupId>${james.groupId}.protocols</james.protocols.groupId>
-        <activemq.version>5.17.1</activemq.version>
+        <activemq.version>5.17.2</activemq.version>
         <apache-mime4j.version>0.8.7</apache-mime4j.version>
         <apache.openjpa.version>3.2.0</apache.openjpa.version>
         <derby.version>10.14.2.0</derby.version>
@@ -611,7 +611,7 @@
         <apache-jspf-resolver.version>1.0.1</apache-jspf-resolver.version>
         <javamail.version>1.5.4</javamail.version>
         <javax-activation.version>1.1.1</javax-activation.version>
-        <slf4j.version>1.7.36</slf4j.version>
+        <slf4j.version>2.0.1</slf4j.version>
 
         <dnsjava.version>3.5.1</dnsjava.version>
         <junit.jupiter.version>5.8.2</junit.jupiter.version>
@@ -633,7 +633,7 @@
         <assertj.version>3.3.0</assertj.version>
         <es.version>2.2.1</es.version>
         <es-reporter.version>6.0.0-RC3</es-reporter.version>
-        <guava.version>31.1-jre</guava.version>
+        <guava.version>30.1-jre</guava.version>
 
         <jutf7.version>1.0.0</jutf7.version>
         <apache.httpcomponents.version>4.5.13</apache.httpcomponents.version>
@@ -651,7 +651,7 @@
         <lucene.version>3.6.2</lucene.version>
         <jasypt.version>1.9.3</jasypt.version>
         <guice.version>5.1.0</guice.version>
-        <logback.version>1.2.11</logback.version>
+        <logback.version>1.4.0</logback.version>
         <tink.version>1.6.1</tink.version>
         <lettuce.core.version>6.1.8.RELEASE</lettuce.core.version>
 
@@ -2079,6 +2079,11 @@
                 <version>${jutf7.version}</version>
             </dependency>
             <dependency>
+                <groupId>com.chuusai</groupId>
+                <artifactId>shapeless_2.13</artifactId>
+                <version>2.3.9</version>
+            </dependency>
+            <dependency>
                 <groupId>com.fasterxml.jackson.core</groupId>
                 <artifactId>jackson-annotations</artifactId>
                 <version>${jackson.version}</version>
@@ -2302,7 +2307,7 @@
             <dependency>
                 <groupId>eu.timepit</groupId>
                 <artifactId>refined_${scala.base}</artifactId>
-                <version>0.9.29</version>
+                <version>0.10.1</version>
             </dependency>
             <dependency>
                 <groupId>io.cucumber</groupId>
@@ -2406,7 +2411,7 @@
             <dependency>
                 <groupId>io.rest-assured</groupId>
                 <artifactId>rest-assured</artifactId>
-                <version>5.1.0</version>
+                <version>5.2.0</version>
                 <exclusions>
                     <exclusion>
                         <groupId>commons-logging</groupId>
@@ -2468,7 +2473,7 @@
                         <groupId>org.springframework.osgi</groupId>
                         <artifactId>spring-osgi-core</artifactId>
                     </exclusion>
-                    <!-- exlude this, its only used in the authentication plugin which we don't use -->
+                    <!-- exclude this, it's only used in the authentication plugin which we don't use -->
                     <exclusion>
                         <groupId>com.ibm.icu</groupId>
                         <artifactId>icu4j</artifactId>
@@ -2488,6 +2493,10 @@
                     <exclusion>
                         <groupId>commons-logging</groupId>
                         <artifactId>commons-logging</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>io.netty</groupId>
+                        <artifactId>*</artifactId>
                     </exclusion>
                 </exclusions>
             </dependency>
@@ -2687,6 +2696,11 @@
                 <version>1.15.3</version>
             </dependency>
             <dependency>
+                <groupId>org.julienrf</groupId>
+                <artifactId>play-json-derived-codecs_${scala.base}</artifactId>
+                <version>10.0.2</version>
+            </dependency>
+            <dependency>
                 <groupId>org.junit.jupiter</groupId>
                 <artifactId>junit-jupiter-engine</artifactId>
                 <version>${junit.jupiter.version}</version>
@@ -2720,6 +2734,12 @@
                 <groupId>org.mock-server</groupId>
                 <artifactId>mockserver-netty</artifactId>
                 <version>5.13.2</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>io.netty</groupId>
+                        <artifactId>*</artifactId>
+                    </exclusion>
+                </exclusions>
             </dependency>
             <dependency>
                 <groupId>org.mockito</groupId>
