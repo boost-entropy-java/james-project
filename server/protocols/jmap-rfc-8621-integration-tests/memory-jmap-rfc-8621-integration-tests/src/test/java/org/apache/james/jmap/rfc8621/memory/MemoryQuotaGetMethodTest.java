@@ -16,26 +16,29 @@
  * specific language governing permissions and limitations      *
  * under the License.                                           *
  ****************************************************************/
-package org.apache.james.queue.api;
 
-import org.apache.james.queue.api.MailQueue.MailQueueException;
-import org.apache.james.queue.api.MailQueue.MailQueueItem;
-import org.apache.james.queue.api.MailQueueItemDecoratorFactory.MailQueueItemDecorator;
-import org.apache.mailet.Mail;
+package org.apache.james.jmap.rfc8621.memory;
 
-public class RawMailQueueItem extends MailQueueItemDecorator {
+import static org.apache.james.data.UsersRepositoryModuleChooser.Implementation.DEFAULT;
 
-    public RawMailQueueItem(MailQueueItem mailQueueItem) {
-        super(mailQueueItem);
-    }
+import org.apache.james.JamesServerBuilder;
+import org.apache.james.JamesServerExtension;
+import org.apache.james.MemoryJamesConfiguration;
+import org.apache.james.MemoryJamesServerMain;
+import org.apache.james.jmap.rfc8621.contract.QuotaGetMethodContract;
+import org.apache.james.modules.TestJMAPServerModule;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
-    @Override
-    public Mail getMail() {
-        return mailQueueItem.getMail();
-    }
+public class MemoryQuotaGetMethodTest implements QuotaGetMethodContract {
 
-    @Override
-    public void done(CompletionStatus success) throws MailQueueException {
-        mailQueueItem.done(success);
-    }
+    @RegisterExtension
+    static JamesServerExtension testExtension = new JamesServerBuilder<MemoryJamesConfiguration>(tmpDir ->
+        MemoryJamesConfiguration.builder()
+            .workingDirectory(tmpDir)
+            .configurationFromClasspath()
+            .usersRepository(DEFAULT)
+            .build())
+        .server(configuration -> MemoryJamesServerMain.createServer(configuration)
+            .overrideWith(new TestJMAPServerModule()))
+        .build();
 }
