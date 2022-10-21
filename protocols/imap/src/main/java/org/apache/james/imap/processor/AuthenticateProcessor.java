@@ -99,10 +99,12 @@ public class AuthenticateProcessor extends AbstractAuthProcessor<AuthenticateReq
                 IRAuthenticateRequest irRequest = (IRAuthenticateRequest) request;
                 doOAuth(irRequest.getInitialClientResponse(), session, request, responder);
             } else {
-                responder.respond(new AuthenticateResponse());
-                session.pushLineHandler((requestSession, data) -> {
-                    doOAuth(extractInitialClientResponse(data), requestSession, request, responder);
-                    requestSession.popLineHandler();
+                session.executeSafely(() -> {
+                    responder.respond(new AuthenticateResponse());
+                    session.pushLineHandler((requestSession, data) -> {
+                        doOAuth(extractInitialClientResponse(data), requestSession, request, responder);
+                        requestSession.popLineHandler();
+                    });
                 });
             }
         } else {
@@ -156,6 +158,7 @@ public class AuthenticateProcessor extends AbstractAuthProcessor<AuthenticateReq
         } catch (Exception e) {
             // Ignored - this exception in parsing will be dealt
             // with in the if clause below
+            LOGGER.info("Invalid syntax in AUTHENTICATE initial client response", e);
             return noDelegation(null, null);
         }
     }
