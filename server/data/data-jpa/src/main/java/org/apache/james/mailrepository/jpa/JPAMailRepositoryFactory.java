@@ -17,37 +17,36 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.modules.server;
+package org.apache.james.mailrepository.jpa;
+
+import javax.inject.Inject;
+import javax.persistence.EntityManagerFactory;
 
 import org.apache.james.mailrepository.api.MailRepository;
-import org.apache.james.mailrepository.api.MailRepositoryStore;
+import org.apache.james.mailrepository.api.MailRepositoryFactory;
 import org.apache.james.mailrepository.api.MailRepositoryUrl;
-import org.apache.james.mailrepository.memory.MailRepositoryLoader;
-import org.apache.james.utils.ClassName;
-import org.apache.james.utils.GuiceGenericLoader;
 
-import com.google.inject.Inject;
-import com.google.inject.Module;
+import com.github.fge.lambdas.Throwing;
 
-public class GuiceMailRepositoryLoader implements MailRepositoryLoader {
-    private final GuiceGenericLoader genericLoader;
+public class JPAMailRepositoryFactory implements MailRepositoryFactory {
+    private final EntityManagerFactory entityManagerFactory;
 
     @Inject
-    public GuiceMailRepositoryLoader(GuiceGenericLoader genericLoader) {
-        this.genericLoader = genericLoader;
+    public JPAMailRepositoryFactory(EntityManagerFactory entityManagerFactory) {
+        this.entityManagerFactory = entityManagerFactory;
     }
 
     @Override
-    public MailRepository load(String fullyQualifiedClassName, MailRepositoryUrl url) throws MailRepositoryStore.MailRepositoryStoreException {
-        try {
-            Module urlModule = binder -> binder.bind(MailRepositoryUrl.class).toInstance(url);
+    public Class<? extends MailRepository> mailRepositoryClass() {
+        return JPAMailRepository.class;
+    }
 
-            return genericLoader.<MailRepository>withChildModule(urlModule)
-                .instantiate(new ClassName(fullyQualifiedClassName));
-        } catch (ClassNotFoundException e) {
-            throw new MailRepositoryStore.UnsupportedRepositoryStoreException("No Mail Repository found with class name " + fullyQualifiedClassName);
-        } catch (ClassCastException e) {
-            throw new MailRepositoryStore.MailRepositoryStoreException(fullyQualifiedClassName + " is not a MailRepository");
-        }
+    @Override
+    public MailRepository create(MailRepositoryUrl url) {
+        // Injecting the url here is redundant since the class is also a
+        // Configurable and the mail repository store will call #configure()
+        // with the same effect. However, this paves the way to drop the
+        // Configurable aspect in the future.
+        return Throwing.supplier(() -> new JPAMailRepository(entityManagerFactory, url)).sneakyThrow().get();
     }
 }

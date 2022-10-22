@@ -20,16 +20,17 @@
 package org.apache.james.mailrepository.memory;
 
 import org.apache.james.mailrepository.api.MailRepository;
-import org.apache.james.mailrepository.api.MailRepositoryLoader;
-import org.apache.james.mailrepository.api.MailRepositoryStore;
+import org.apache.james.mailrepository.api.MailRepositoryFactory;
 import org.apache.james.mailrepository.api.MailRepositoryUrl;
 
-public class SimpleMailRepositoryLoader implements MailRepositoryLoader {
+public class MemoryMailRepositoryFactory implements MailRepositoryFactory {
     @Override
-    public MailRepository load(String fullyQualifiedClassName, MailRepositoryUrl url) throws MailRepositoryStore.MailRepositoryStoreException {
-        if (fullyQualifiedClassName.equals(MemoryMailRepository.class.getCanonicalName())) {
-            return new MemoryMailRepository();
-        }
-        throw new MailRepositoryStore.UnsupportedRepositoryStoreException(fullyQualifiedClassName + " is not supported");
+    public Class<? extends MailRepository> mailRepositoryClass() {
+        return MemoryMailRepository.class;
+    }
+
+    @Override
+    public MailRepository create(MailRepositoryUrl url) {
+        return new MemoryMailRepository();
     }
 }

@@ -17,19 +17,33 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.mailrepository.memory;
+package org.apache.james.modules.mailrepository.guice;
+
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
+import javax.inject.Inject;
 
 import org.apache.james.mailrepository.api.MailRepository;
+import org.apache.james.mailrepository.api.MailRepositoryFactory;
 import org.apache.james.mailrepository.api.MailRepositoryLoader;
 import org.apache.james.mailrepository.api.MailRepositoryStore;
 import org.apache.james.mailrepository.api.MailRepositoryUrl;
 
-public class SimpleMailRepositoryLoader implements MailRepositoryLoader {
-    @Override
+public class MultiBoundGuiceRepositoryLoader implements MailRepositoryLoader {
+    private final Map<String, Function<MailRepositoryUrl, MailRepository>> factoriesByType;
+
+    @Inject
+    private MultiBoundGuiceRepositoryLoader(Set<MailRepositoryFactory> factories) {
+        factoriesByType = factories.stream().collect(Collectors.toMap(factory -> factory.mailRepositoryClass().getName(), it -> it::create));
+    }
+
     public MailRepository load(String fullyQualifiedClassName, MailRepositoryUrl url) throws MailRepositoryStore.MailRepositoryStoreException {
-        if (fullyQualifiedClassName.equals(MemoryMailRepository.class.getCanonicalName())) {
-            return new MemoryMailRepository();
-        }
-        throw new MailRepositoryStore.UnsupportedRepositoryStoreException(fullyQualifiedClassName + " is not supported");
+        return Optional.ofNullable(factoriesByType.get(fullyQualifiedClassName))
+                .map(factory -> factory.apply(url))
+                .orElseThrow(() -> new MailRepositoryStore.MailRepositoryStoreException("no factory for " + fullyQualifiedClassName));
     }
 }

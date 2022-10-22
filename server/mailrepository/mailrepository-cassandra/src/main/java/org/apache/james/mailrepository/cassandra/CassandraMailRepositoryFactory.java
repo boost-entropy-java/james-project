@@ -17,19 +17,41 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.mailrepository.memory;
+package org.apache.james.mailrepository.cassandra;
 
+import javax.inject.Inject;
+
+import org.apache.james.blob.mail.MimeMessageStore;
 import org.apache.james.mailrepository.api.MailRepository;
-import org.apache.james.mailrepository.api.MailRepositoryLoader;
-import org.apache.james.mailrepository.api.MailRepositoryStore;
+import org.apache.james.mailrepository.api.MailRepositoryFactory;
 import org.apache.james.mailrepository.api.MailRepositoryUrl;
 
-public class SimpleMailRepositoryLoader implements MailRepositoryLoader {
+public class CassandraMailRepositoryFactory implements MailRepositoryFactory {
+    private final CassandraMailRepositoryKeysDAO keysDAO;
+    private final CassandraMailRepositoryCountDAO countDAO;
+    private final CassandraMailRepositoryMailDaoV2 mailDAO;
+    private final MimeMessageStore.Factory mimeMessageStoreFactory;
+
+    @Inject
+    public CassandraMailRepositoryFactory(
+            CassandraMailRepositoryKeysDAO keysDAO,
+            CassandraMailRepositoryCountDAO countDAO,
+            CassandraMailRepositoryMailDaoV2 mailDAO,
+            MimeMessageStore.Factory mimeMessageStoreFactory
+    ) {
+        this.keysDAO = keysDAO;
+        this.countDAO = countDAO;
+        this.mailDAO = mailDAO;
+        this.mimeMessageStoreFactory = mimeMessageStoreFactory;
+    }
+
     @Override
-    public MailRepository load(String fullyQualifiedClassName, MailRepositoryUrl url) throws MailRepositoryStore.MailRepositoryStoreException {
-        if (fullyQualifiedClassName.equals(MemoryMailRepository.class.getCanonicalName())) {
-            return new MemoryMailRepository();
-        }
-        throw new MailRepositoryStore.UnsupportedRepositoryStoreException(fullyQualifiedClassName + " is not supported");
+    public Class<? extends MailRepository> mailRepositoryClass() {
+        return CassandraMailRepository.class;
+    }
+
+    @Override
+    public MailRepository create(MailRepositoryUrl url) {
+        return new CassandraMailRepository(url, keysDAO, countDAO, mailDAO, mimeMessageStoreFactory);
     }
 }

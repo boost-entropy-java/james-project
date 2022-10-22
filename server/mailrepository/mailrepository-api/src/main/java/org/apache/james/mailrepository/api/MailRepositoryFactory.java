@@ -17,19 +17,10 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.mailrepository.memory;
+package org.apache.james.mailrepository.api;
 
-import org.apache.james.mailrepository.api.MailRepository;
-import org.apache.james.mailrepository.api.MailRepositoryLoader;
-import org.apache.james.mailrepository.api.MailRepositoryStore;
-import org.apache.james.mailrepository.api.MailRepositoryUrl;
+public interface MailRepositoryFactory {
+    Class<? extends MailRepository> mailRepositoryClass();
 
-public class SimpleMailRepositoryLoader implements MailRepositoryLoader {
-    @Override
-    public MailRepository load(String fullyQualifiedClassName, MailRepositoryUrl url) throws MailRepositoryStore.MailRepositoryStoreException {
-        if (fullyQualifiedClassName.equals(MemoryMailRepository.class.getCanonicalName())) {
-            return new MemoryMailRepository();
-        }
-        throw new MailRepositoryStore.UnsupportedRepositoryStoreException(fullyQualifiedClassName + " is not supported");
-    }
+    MailRepository create(MailRepositoryUrl url);
 }
