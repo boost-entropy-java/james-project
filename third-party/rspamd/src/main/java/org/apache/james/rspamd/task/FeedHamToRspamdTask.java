@@ -27,10 +27,13 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.apache.commons.lang3.tuple.Pair;
+import org.apache.james.core.Username;
 import org.apache.james.mailbox.MailboxManager;
 import org.apache.james.mailbox.MessageIdManager;
 import org.apache.james.mailbox.model.MessageResult;
 import org.apache.james.mailbox.store.MailboxSessionMapperFactory;
+import org.apache.james.rspamd.client.RspamdClientConfiguration;
 import org.apache.james.rspamd.client.RspamdHttpClient;
 import org.apache.james.task.Task;
 import org.apache.james.task.TaskExecutionDetails;
@@ -92,6 +95,25 @@ public class FeedHamToRspamdTask implements Task {
         @Override
         public Instant timestamp() {
             return timestamp;
+        }
+
+        @Override
+        public final boolean equals(Object o) {
+            if (o instanceof AdditionalInformation) {
+                AdditionalInformation that = (AdditionalInformation) o;
+
+                return Objects.equals(this.hamMessageCount, that.hamMessageCount)
+                    && Objects.equals(this.reportedHamMessageCount, that.reportedHamMessageCount)
+                    && Objects.equals(this.errorCount, that.errorCount)
+                    && Objects.equals(this.timestamp, that.timestamp)
+                    && Objects.equals(this.runningOptions, that.runningOptions);
+            }
+            return false;
+        }
+
+        @Override
+        public final int hashCode() {
+            return Objects.hash(timestamp, hamMessageCount, reportedHamMessageCount, errorCount, runningOptions);
         }
     }
 
@@ -219,27 +241,29 @@ public class FeedHamToRspamdTask implements Task {
 
     private final GetMailboxMessagesService messagesService;
     private final RspamdHttpClient rspamdHttpClient;
+    private final RspamdClientConfiguration configuration;
     private final RunningOptions runningOptions;
     private final Context context;
     private final Clock clock;
 
     public FeedHamToRspamdTask(MailboxManager mailboxManager, UsersRepository usersRepository, MessageIdManager messageIdManager, MailboxSessionMapperFactory mapperFactory,
-                               RspamdHttpClient rspamdHttpClient, RunningOptions runningOptions, Clock clock) {
+                               RspamdHttpClient rspamdHttpClient, RunningOptions runningOptions, Clock clock, RspamdClientConfiguration configuration) {
         this.runningOptions = runningOptions;
         this.messagesService = new GetMailboxMessagesService(mailboxManager, usersRepository, mapperFactory, messageIdManager);
         this.rspamdHttpClient = rspamdHttpClient;
         this.context = new Context();
         this.clock = clock;
+        this.configuration = configuration;
     }
 
     @Override
     public Result run() {
         Optional<Date> afterDate = runningOptions.getPeriodInSecond().map(periodInSecond -> Date.from(clock.instant().minusSeconds(periodInSecond)));
         return messagesService.getHamMessagesOfAllUser(afterDate, runningOptions, context)
-            .transform(ReactorUtils.<MessageResult, Result>throttle()
+            .transform(ReactorUtils.<Pair<Username, MessageResult>, Result>throttle()
                 .elements(runningOptions.getMessagesPerSecond())
                 .per(Duration.ofSeconds(1))
-                .forOperation(messageResult -> rspamdHttpClient.reportAsHam(Throwing.supplier(() -> messageResult.getFullContent().reactiveBytes()).get())
+                .forOperation(userAndMessageResult -> reportHam(userAndMessageResult)
                     .timeout(runningOptions.getRspamdTimeout())
                     .then(Mono.fromCallable(() -> {
                         context.incrementReportedHamMessageCount(1);
@@ -272,5 +296,13 @@ public class FeedHamToRspamdTask implements Task {
 
     public RunningOptions getRunningOptions() {
         return runningOptions;
+    }
+
+    private Mono<Void> reportHam(Pair<Username, MessageResult> userAndMessageResult) {
+        if (configuration.usePerUserBayes()) {
+            return rspamdHttpClient.reportAsHam(Throwing.supplier(() -> userAndMessageResult.getRight().getFullContent().reactiveBytes()).get(),
+                RspamdHttpClient.Options.forUser(userAndMessageResult.getLeft()));
+        }
+        return rspamdHttpClient.reportAsHam(Throwing.supplier(() -> userAndMessageResult.getRight().getFullContent().reactiveBytes()).get());
     }
 }
