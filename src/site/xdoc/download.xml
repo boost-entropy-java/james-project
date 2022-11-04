@@ -147,12 +147,12 @@
 
   <section name="Apache Mime4J">
   
-    <p>Apache Mime4J 0.8.7 is the latest stable version.</p>
+    <p>Apache Mime4J 0.8.8 is the latest stable version.</p>
 
     <p>Sources:
-      <a href="https://www.apache.org/dyn/closer.lua/james/mime4j/0.8.7/james-mime4j-sources-0.8.7.zip">(Zip)</a>
-      [<a href="https://downloads.apache.org/james/mime4j/0.8.7/james-mime4j-sources-0.8.7.zip.sha512">SHA-512</a>]
-      [<a href="https://downloads.apache.org/james/mime4j/0.8.7/james-mime4j-sources-0.8.7.zip.asc">PGP</a>]
+      <a href="https://www.apache.org/dyn/closer.lua/james/mime4j/0.8.8/james-mime4j-sources-0.8.8.zip">(Zip)</a>
+      [<a href="https://downloads.apache.org/james/mime4j/0.8.8/james-mime4j-sources-0.8.8.zip.sha512">SHA-512</a>]
+      [<a href="https://downloads.apache.org/james/mime4j/0.8.8/james-mime4j-sources-0.8.8.zip.asc">PGP</a>]
     </p>
 
     <p>You can directly use the core library with maven:</p>
@@ -162,15 +162,15 @@
   &lt;dependency&gt;
     &lt;groupId&gt;org.apache.james&lt;/groupId&gt;
     &lt;artifactId&gt;apache-mime4j-core&lt;/artifactId&gt;
-    &lt;version&gt;0.8.7&lt;/version&gt;
+    &lt;version&gt;0.8.8&lt;/version&gt;
   &lt;/dependency&gt;
      </code>
     </pre>
 
     <p>Direct download link:
-      <a href="https://www.apache.org/dyn/closer.lua/james/mime4j/0.8.7/apache-mime4j-core-0.8.7.jar">(Jar)</a>
-      [<a href="https://downloads.apache.org/james/mime4j/0.8.7/apache-mime4j-core-0.8.7.jar.sha512">SHA-512</a>]
-      [<a href="https://downloads.apache.org/james/mime4j/0.8.7/apache-mime4j-core-0.8.7.jar.asc">PGP</a>]
+      <a href="https://www.apache.org/dyn/closer.lua/james/mime4j/0.8.8/apache-mime4j-core-0.8.8.jar">(Jar)</a>
+      [<a href="https://downloads.apache.org/james/mime4j/0.8.8/apache-mime4j-core-0.8.8.jar.sha512">SHA-512</a>]
+      [<a href="https://downloads.apache.org/james/mime4j/0.8.8/apache-mime4j-core-0.8.8.jar.asc">PGP</a>]
       </p>
 
     <p>In order to use Mime-4j DOM:</p>
@@ -180,15 +180,15 @@
   &lt;dependency&gt;
     &lt;groupId&gt;org.apache.james&lt;/groupId&gt;
     &lt;artifactId&gt;apache-mime4j-dom&lt;/artifactId&gt;
-    &lt;version&gt;0.8.7&lt;/version&gt;
+    &lt;version&gt;0.8.8&lt;/version&gt;
   &lt;/dependency&gt;
      </code>
     </pre>
 
     <p>Direct download link:
-      <a href="https://www.apache.org/dyn/closer.lua/james/mime4j/0.8.7/apache-mime4j-dom-0.8.7.jar">(Jar)</a>
-      [<a href="https://downloads.apache.org/james/mime4j/0.8.7/apache-mime4j-dom-0.8.7.jar.sha512">SHA-512</a>]
-      [<a href="https://downloads.apache.org/james/mime4j/0.8.7/apache-mime4j-dom-0.8.7.jar.asc">PGP</a>]
+      <a href="https://www.apache.org/dyn/closer.lua/james/mime4j/0.8.8/apache-mime4j-dom-0.8.8.jar">(Jar)</a>
+      [<a href="https://downloads.apache.org/james/mime4j/0.8.8/apache-mime4j-dom-0.8.8.jar.sha512">SHA-512</a>]
+      [<a href="https://downloads.apache.org/james/mime4j/0.8.8/apache-mime4j-dom-0.8.8.jar.asc">PGP</a>]
     </p>
 
     <p>An aggregator project is also available:</p>
@@ -198,27 +198,27 @@
   &lt;dependency&gt;
     &lt;groupId&gt;org.apache.james&lt;/groupId&gt;
     &lt;artifactId&gt;apache-mime4j&lt;/artifactId&gt;
-    &lt;version&gt;0.8.7&lt;/version&gt;
+    &lt;version&gt;0.8.8&lt;/version&gt;
   &lt;/dependency&gt;
      </code>
     </pre>
 
     <p>Direct download link:
-      <a href="https://www.apache.org/dyn/closer.lua/james/mime4j/0.8.7/apache-mime4j-0.8.7-bin.zip">(Zip)</a>
-      [<a href="https://downloads.apache.org/james/mime4j/0.8.7/apache-mime4j-0.8.7-bin.zip.sha512">SHA-512</a>]
-      [<a href="https://downloads.apache.org/james/mime4j/0.8.7/apache-mime4j-0.8.7-bin.zip.asc">PGP</a>]
+      <a href="https://www.apache.org/dyn/closer.lua/james/mime4j/0.8.8/apache-mime4j-0.8.8-bin.zip">(Zip)</a>
+      [<a href="https://downloads.apache.org/james/mime4j/0.8.8/apache-mime4j-0.8.8-bin.zip.sha512">SHA-512</a>]
+      [<a href="https://downloads.apache.org/james/mime4j/0.8.8/apache-mime4j-0.8.8-bin.zip.asc">PGP</a>]
     </p>
   
   </section>
 
   <section name="Apache jSPF">
   
-    <p>Apache James jSPF 1.0.1 is the latest jSPF stable version.</p>
+    <p>Apache James jSPF 1.0.2 is the latest jSPF stable version.</p>
 
     <p>Sources:
-      <a href="https://www.apache.org/dyn/closer.lua/james/jspf/1.0.1/apache-jspf-sources-1.0.1.zip">(Zip)</a>
-      [<a href="https://downloads.apache.org/james/jspf/1.0.1/apache-jspf-sources-1.0.1.zip.sha1">SHA-1</a>]
-      [<a href="https://downloads.apache.org/james/jspf/1.0.1/apache-jspf-sources-1.0.1.zip.asc">PGP</a>]
+      <a href="https://www.apache.org/dyn/closer.lua/james/jspf/1.0.2/apache-jspf-sources-1.0.2.zip">(Zip)</a>
+      [<a href="https://downloads.apache.org/james/jspf/1.0.2/apache-jspf-sources-1.0.2.zip.sha1">SHA-1</a>]
+      [<a href="https://downloads.apache.org/james/jspf/1.0.2/apache-jspf-sources-1.0.2.zip.asc">PGP</a>]
     </p>
 
     <p>You can directly use it with maven:</p>
@@ -228,15 +228,15 @@
   &lt;dependency&gt;
     &lt;groupId&gt;org.apache.james.jspf&lt;/groupId&gt;
     &lt;artifactId&gt;apache-jspf&lt;/artifactId&gt;
-    &lt;version&gt;1.0.1&lt;/version&gt;
+    &lt;version&gt;1.0.2&lt;/version&gt;
   &lt;/dependency&gt;
       </code>
     </pre>
 
     <p>Direct download link:
-      <a href="https://www.apache.org/dyn/closer.lua/james/jspf/1.0.1/apache-jspf-1.0.1-bin.zip">(Zip)</a>
-      [<a href="https://downloads.apache.org/james/jspf/1.0.1/apache-jspf-1.0.1-bin.zip.sha1">SHA-1</a>]
-      [<a href="https://downloads.apache.org/james/jspf/1.0.1/apache-jspf-1.0.1-bin.zip.asc">PGP</a>]
+      <a href="https://www.apache.org/dyn/closer.lua/james/jspf/1.0.2/apache-jspf-1.0.2-bin.zip">(Zip)</a>
+      [<a href="https://downloads.apache.org/james/jspf/1.0.2/apache-jspf-1.0.2-bin.zip.sha1">SHA-1</a>]
+      [<a href="https://downloads.apache.org/james/jspf/1.0.2/apache-jspf-1.0.2-bin.zip.asc">PGP</a>]
     </p>
   
   </section>
@@ -273,12 +273,12 @@
   
   <section name="Apache JSieve">
   
-    <p>Apache JSieve 0.7 is the latest stable version.</p>
+    <p>Apache JSieve 0.8 is the latest stable version.</p>
 
     <p>Sources:
-      <a href="https://www.apache.org/dyn/closer.lua/james/jsieve/0.7/apache-jsieve-sources-0.7.zip">(Zip)</a>
-      [<a href="https://downloads.apache.org/james/jsieve/0.7/apache-jsieve-sources-0.7.zip.sha1">SHA-1</a>]
-      [<a href="https://downloads.apache.org/james/jsieve/0.7/apache-jsieve-sources-0.7.zip.asc">PGP</a>]
+      <a href="https://www.apache.org/dyn/closer.lua/james/jsieve/0.8/apache-jsieve-sources-0.8.zip">(Zip)</a>
+      [<a href="https://downloads.apache.org/james/jsieve/0.8/apache-jsieve-sources-0.8.zip.sha1">SHA-1</a>]
+      [<a href="https://downloads.apache.org/james/jsieve/0.8/apache-jsieve-sources-0.8.zip.asc">PGP</a>]
     </p>
 
     <p>You can directly use it with maven:</p>
@@ -288,15 +288,15 @@
   &lt;dependency&gt;
     &lt;groupId&gt;org.apache.james&lt;/groupId&gt;
     &lt;artifactId&gt;apache-jsieve-core&lt;/artifactId&gt;
-    &lt;version&gt;0.7&lt;/version&gt;
+    &lt;version&gt;0.8&lt;/version&gt;
   &lt;/dependency&gt;
       </code>
     </pre>
 
     <p>Direct download link:
-      <a href="https://www.apache.org/dyn/closer.lua/james/jsieve/0.7/apache-jsieve-core-0.7.jar">(Jar)</a>
-      [<a href="https://downloads.apache.org/james/jsieve/0.7/apache-jsieve-core-0.7.jar.sha1">SHA-1</a>]
-      [<a href="https://downloads.apache.org/james/jsieve/0.7/apache-jsieve-core-0.7.jar.asc">PGP</a>]
+      <a href="https://www.apache.org/dyn/closer.lua/james/jsieve/0.8/apache-jsieve-core-0.8.jar">(Jar)</a>
+      [<a href="https://downloads.apache.org/james/jsieve/0.8/apache-jsieve-core-0.8.jar.sha1">SHA-1</a>]
+      [<a href="https://downloads.apache.org/james/jsieve/0.8/apache-jsieve-core-0.8.jar.asc">PGP</a>]
     </p>
 
     <p>An aggregator project is also available:</p>
@@ -306,15 +306,15 @@
   &lt;dependency&gt;
     &lt;groupId&gt;org.apache.james&lt;/groupId&gt;
     &lt;artifactId&gt;apache-jsieve-all&lt;/artifactId&gt;
-    &lt;version&gt;0.7&lt;/version&gt;
+    &lt;version&gt;0.8&lt;/version&gt;
   &lt;/dependency&gt;
       </code>
     </pre>
 
     <p>Direct download link:
-      <a href="https://www.apache.org/dyn/closer.lua/james/jsieve/0.7/apache-jsieve-0.7-all.tar.gz">(Tar Gz)</a>
-      [<a href="https://downloads.apache.org/james/jsieve/0.7/apache-jsieve-0.7-all.tar.gz.sha1">SHA-1</a>]
-      [<a href="https://downloads.apache.org/james/jsieve/0.7/apache-jsieve-0.7-all.tar.gz.asc">PGP</a>]
+      <a href="https://www.apache.org/dyn/closer.lua/james/jsieve/0.8/apache-jsieve-0.8-all.tar.gz">(Tar Gz)</a>
+      [<a href="https://downloads.apache.org/james/jsieve/0.8/apache-jsieve-0.8-all.tar.gz.sha1">SHA-1</a>]
+      [<a href="https://downloads.apache.org/james/jsieve/0.8/apache-jsieve-0.8-all.tar.gz.asc">PGP</a>]
     </p>
 
   
