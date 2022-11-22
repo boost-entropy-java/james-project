@@ -98,7 +98,7 @@ public class SearchCommandParser extends AbstractUidCommandParser {
             case 'D':
                 return d(request);
             case 'E':
-                throw new DecodingException(HumanReadableText.ILLEGAL_ARGUMENTS, "Unknown search key");
+                return emailId(request);
             case 'F':
                 return f(request, context.getCharset());
             case 'G':
@@ -270,6 +270,8 @@ public class SearchCommandParser extends AbstractUidCommandParser {
             return text(request, charset);
         case 'O':
             return to(request, charset);
+        case 'H':
+            return threadId(request, charset);
         default:
             throw new DecodingException(HumanReadableText.ILLEGAL_ARGUMENTS, "Unknown search key");
         }
@@ -726,6 +728,18 @@ public class SearchCommandParser extends AbstractUidCommandParser {
         return result;
     }
 
+    private SearchKey emailId(ImapRequestLineReader request) throws DecodingException {
+        nextIsM(request);
+        nextIsA(request);
+        nextIsI(request);
+        nextIsL(request);
+        nextIsI(request);
+        nextIsD(request);
+        nextIsSpace(request);
+
+        return SearchKey.buildMessageId(request.astring());
+    }
+
     private SearchKey uid(ImapRequestLineReader request) throws DecodingException {
         final SearchKey result;
         nextIsD(request);
@@ -746,6 +760,18 @@ public class SearchCommandParser extends AbstractUidCommandParser {
         final String value = request.astring(charset);
         result = SearchKey.buildTo(value);
         return result;
+    }
+
+    private SearchKey threadId(ImapRequestLineReader request, Charset charset) throws DecodingException {
+        nextIsR(request);
+        nextIsE(request);
+        nextIsA(request);
+        nextIsD(request);
+        nextIsI(request);
+        nextIsD(request);
+        nextIsSpace(request);
+        String astring = request.astring(charset);
+        return SearchKey.buildThreadId(astring);
     }
 
     private SearchKey subject(ImapRequestLineReader request, Charset charset) throws DecodingException {

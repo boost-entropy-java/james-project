@@ -20,5 +20,5 @@ C: abcd CAPABILITY
 S: \* CAPABILITY .+
 S: abcd OK CAPABILITY completed.
 
-C: abcd CAPABILITY extra stuff
-S: abcd BAD CAPABILITY failed. Illegal arguments.
+C: hijk CAPABILITY extra stuff
+S: hijk BAD CAPABILITY failed. Illegal arguments.

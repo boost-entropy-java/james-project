@@ -38,7 +38,6 @@ import org.apache.james.modules.protocols.SMTPServerModule;
 import org.apache.james.modules.queue.activemq.ActiveMQQueueModule;
 import org.apache.james.modules.server.DataRoutesModules;
 import org.apache.james.modules.server.DefaultProcessorsConfigurationProviderModule;
-import org.apache.james.modules.server.ElasticSearchMetricReporterModule;
 import org.apache.james.modules.server.InconsistencyQuotasSolvingRoutesModule;
 import org.apache.james.modules.server.JMXServerModule;
 import org.apache.james.modules.server.MailQueueRoutesModule;
@@ -80,7 +79,6 @@ public class JPAJamesServerMain implements JamesServerMain {
     private static final Module JPA_SERVER_MODULE = Modules.combine(
         new ActiveMQQueueModule(),
         new DefaultProcessorsConfigurationProviderModule(),
-        new ElasticSearchMetricReporterModule(),
         new JPADataModule(),
         new JPAMailboxModule(),
         new MailboxModule(),

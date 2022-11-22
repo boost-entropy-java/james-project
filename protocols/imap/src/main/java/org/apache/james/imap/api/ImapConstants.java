@@ -71,6 +71,8 @@ public interface ImapConstants {
 
     Capability SUPPORTS_RFC3348 = Capability.of("CHILDREN");
 
+    Capability SUPPORTS_OBJECTID = Capability.of("OBJECTID");
+
     Capability SUPPORTS_I18NLEVEL_1 = Capability.of("I18NLEVEL=1");
 
     Capability SUPPORTS_NAMESPACES = Capability.of("NAMESPACE");
@@ -143,6 +145,8 @@ public interface ImapConstants {
     char BACK_SLASH = '\\';
 
     String STATUS_UNSEEN = "UNSEEN";
+
+    String STATUS_MAILBOXID = "MAILBOXID";
 
     String STATUS_UIDVALIDITY = "UIDVALIDITY";
 
@@ -249,4 +253,6 @@ public interface ImapConstants {
     String STORAGE_QUOTA_RESOURCE = "STORAGE";
 
     String MESSAGE_QUOTA_RESOURCE = "MESSAGE";
+    String EMAILID = "EMAILID";
+    String THREADID = "THREADID";
 }
