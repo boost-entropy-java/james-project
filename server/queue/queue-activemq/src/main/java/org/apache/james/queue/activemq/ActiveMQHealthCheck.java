@@ -59,9 +59,10 @@ public class ActiveMQHealthCheck implements HealthCheck {
                 return Result.healthy(COMPONENT_NAME);
             } catch (Exception e) {
                 LOGGER.warn("{} is unhealthy. {}", COMPONENT_NAME.getName(), e.getMessage());
-                return Result.unhealthy(COMPONENT_NAME, e.getMessage());
+                return Result.unhealthy(COMPONENT_NAME, e.toString(), e);
             }
         }).subscribeOn(Schedulers.boundedElastic());
     }
+
 }
 
