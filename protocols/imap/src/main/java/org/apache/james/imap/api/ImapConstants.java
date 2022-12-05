@@ -141,6 +141,9 @@ public interface ImapConstants {
 
     byte[] NAME_ATTRIBUTE_HAS_NO_CHILDREN = "\\HasNoChildren".getBytes(US_ASCII);
 
+    byte[] NAME_ATTRIBUTE_SUBSCRIBED = "\\Subscribed".getBytes(US_ASCII);
+
+    byte[] NAME_ATTRIBUTE_NON_EXISTENT = "\\NonExistent".getBytes(US_ASCII);
 
     char BACK_SLASH = '\\';
 
@@ -170,6 +173,7 @@ public interface ImapConstants {
     ImapCommand COMPRESS_COMMAND = ImapCommand.anyStateCommand("COMPRESS");
     ImapCommand LOGOUT_COMMAND = ImapCommand.anyStateCommand("LOGOUT");
     ImapCommand NOOP_COMMAND = ImapCommand.anyStateCommand("NOOP");
+    ImapCommand ID_COMMAND = ImapCommand.anyStateCommand("ID");
 
     ImapCommand AUTHENTICATE_COMMAND = ImapCommand.nonAuthenticatedStateCommand("AUTHENTICATE");
     ImapCommand LOGIN_COMMAND = ImapCommand.nonAuthenticatedStateCommand("LOGIN");

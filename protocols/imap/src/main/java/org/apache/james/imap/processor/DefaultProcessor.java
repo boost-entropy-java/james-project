@@ -61,6 +61,7 @@ public class DefaultProcessor implements ImapProcessor {
         builder.add(new SystemMessageProcessor(mailboxManager));
         builder.add(new LogoutProcessor(mailboxManager, statusResponseFactory, metricFactory));
         builder.add(capabilityProcessor);
+        builder.add(new IdProcessor(mailboxManager, statusResponseFactory, metricFactory));
         builder.add(new CheckProcessor(mailboxManager, statusResponseFactory, metricFactory));
         builder.add(new LoginProcessor(mailboxManager, statusResponseFactory, metricFactory));
         builder.add(new RenameProcessor(mailboxManager, statusResponseFactory, metricFactory));
@@ -80,8 +81,8 @@ public class DefaultProcessor implements ImapProcessor {
         builder.add(new IdleProcessor(mailboxManager, statusResponseFactory, metricFactory));
         builder.add(new StatusProcessor(mailboxManager, statusResponseFactory, metricFactory));
         builder.add(new LSubProcessor(mailboxManager, subscriptionManager, statusResponseFactory, metricFactory));
-        builder.add(new XListProcessor(mailboxManager, statusResponseFactory, mailboxTyper, metricFactory));
-        builder.add(new ListProcessor<>(mailboxManager, statusResponseFactory, metricFactory));
+        builder.add(new XListProcessor(mailboxManager, statusResponseFactory, mailboxTyper, metricFactory, subscriptionManager));
+        builder.add(new ListProcessor<>(mailboxManager, statusResponseFactory, metricFactory, subscriptionManager));
         builder.add(new SearchProcessor(mailboxManager, statusResponseFactory, metricFactory));
         SelectProcessor selectProcessor = new SelectProcessor(mailboxManager, eventBus, statusResponseFactory, metricFactory);
         builder.add(selectProcessor);

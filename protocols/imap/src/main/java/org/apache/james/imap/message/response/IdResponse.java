@@ -16,20 +16,12 @@
  * specific language governing permissions and limitations      *
  * under the License.                                           *
  ****************************************************************/
-package org.apache.james.imap.message.request;
 
-import static org.apache.james.imap.api.ImapConstants.XLIST_COMMAND;
+package org.apache.james.imap.message.response;
 
-import java.util.EnumSet;
-import java.util.Optional;
+import org.apache.james.imap.api.message.response.ImapResponseMessage;
 
-import org.apache.james.imap.api.Tag;
-
-/**
- * XLIST command request
- */
-public class XListRequest extends ListRequest {
-    public XListRequest(String referenceName, String mailboxPattern, Tag tag) {
-        super(XLIST_COMMAND, referenceName, mailboxPattern, tag, EnumSet.noneOf(ListSelectOption.class), EnumSet.noneOf(ListReturnOption.class), Optional.empty());
+public class IdResponse implements ImapResponseMessage {
+    public IdResponse() {
     }
 }
