@@ -17,18 +17,15 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.mailbox.cassandra.table;
+package org.apache.james.jwt.userinfo;
 
-public interface CassandraMailboxPathTable {
+public class UserInfoCheckException extends RuntimeException {
 
-    String TABLE_NAME = "mailboxPath";
+    public UserInfoCheckException(String message) {
+        super(message);
+    }
 
-    String NAMESPACE_AND_USER = "namespaceAndUser";
-
-    String MAILBOX_NAME = "mailboxName";
-
-    String MAILBOX_ID = "mailboxId";
-
-    String[] FIELDS = { NAMESPACE_AND_USER, MAILBOX_NAME, MAILBOX_ID};
-
+    public UserInfoCheckException(String message, Throwable cause) {
+        super(message, cause);
+    }
 }

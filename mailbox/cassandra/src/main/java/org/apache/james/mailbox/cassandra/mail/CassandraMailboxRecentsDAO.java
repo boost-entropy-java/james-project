@@ -36,11 +36,13 @@ import org.apache.james.mailbox.cassandra.ids.CassandraId;
 import org.apache.james.mailbox.cassandra.table.CassandraMailboxRecentsTable;
 
 import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.ProtocolVersion;
 import com.datastax.oss.driver.api.core.cql.BatchStatement;
 import com.datastax.oss.driver.api.core.cql.BatchStatementBuilder;
 import com.datastax.oss.driver.api.core.cql.BatchType;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
+import com.datastax.oss.driver.api.core.type.codec.TypeCodecs;
 import com.google.common.collect.Lists;
 
 import reactor.core.publisher.Flux;
@@ -55,6 +57,7 @@ public class CassandraMailboxRecentsDAO {
     private final PreparedStatement deleteStatement;
     private final PreparedStatement deleteAllStatement;
     private final PreparedStatement addStatement;
+    private final ProtocolVersion protocolVersion;
 
     @Inject
     public CassandraMailboxRecentsDAO(CqlSession session) {
@@ -63,6 +66,7 @@ public class CassandraMailboxRecentsDAO {
         deleteStatement = createDeleteStatement(session);
         deleteAllStatement = createDeleteAllStatement(session);
         addStatement = createAddStatement(session);
+        protocolVersion = session.getContext().getProtocolVersion();
     }
 
     private PreparedStatement createReadStatement(CqlSession session) {
@@ -98,13 +102,13 @@ public class CassandraMailboxRecentsDAO {
 
     public Flux<MessageUid> getRecentMessageUidsInMailbox(CassandraId mailboxId) {
         return cassandraAsyncExecutor.executeRows(bindWithMailbox(mailboxId, readStatement))
-            .map(row -> row.getLong(CassandraMailboxRecentsTable.RECENT_MESSAGE_UID))
+            .map(row -> TypeCodecs.BIGINT.decodePrimitive(row.getBytesUnsafe(0), protocolVersion))
             .map(MessageUid::of);
     }
 
     private BoundStatement bindWithMailbox(CassandraId mailboxId, PreparedStatement statement) {
         return statement.bind()
-            .setUuid(CassandraMailboxRecentsTable.MAILBOX_ID, mailboxId.asUuid());
+            .set(CassandraMailboxRecentsTable.MAILBOX_ID, mailboxId.asUuid(), TypeCodecs.TIMEUUID);
     }
 
     public Mono<Void> removeFromRecent(CassandraId mailboxId, MessageUid messageUid) {

@@ -30,17 +30,11 @@ import static org.apache.james.mailbox.cassandra.table.CassandraMessageIdTable.T
 import static org.apache.james.mailbox.cassandra.table.CassandraMessageIdTable.THREAD_ID;
 import static org.apache.james.mailbox.cassandra.table.CassandraMessageIds.IMAP_UID;
 import static org.apache.james.mailbox.cassandra.table.CassandraMessageIds.MAILBOX_ID;
-import static org.apache.james.mailbox.cassandra.table.CassandraMessageIds.MAILBOX_ID_LOWERCASE;
 import static org.apache.james.mailbox.cassandra.table.CassandraMessageIds.MESSAGE_ID;
-import static org.apache.james.mailbox.cassandra.table.CassandraMessageIds.MESSAGE_ID_LOWERCASE;
 import static org.apache.james.mailbox.cassandra.table.CassandraMessageV3Table.BODY_START_OCTET;
-import static org.apache.james.mailbox.cassandra.table.CassandraMessageV3Table.BODY_START_OCTET_LOWERCASE;
 import static org.apache.james.mailbox.cassandra.table.CassandraMessageV3Table.FULL_CONTENT_OCTETS;
-import static org.apache.james.mailbox.cassandra.table.CassandraMessageV3Table.FULL_CONTENT_OCTETS_LOWERCASE;
 import static org.apache.james.mailbox.cassandra.table.CassandraMessageV3Table.HEADER_CONTENT;
-import static org.apache.james.mailbox.cassandra.table.CassandraMessageV3Table.HEADER_CONTENT_LOWERCASE;
 import static org.apache.james.mailbox.cassandra.table.CassandraMessageV3Table.INTERNAL_DATE;
-import static org.apache.james.mailbox.cassandra.table.CassandraMessageV3Table.INTERNAL_DATE_LOWERCASE;
 import static org.apache.james.mailbox.cassandra.table.Flag.ANSWERED;
 import static org.apache.james.mailbox.cassandra.table.Flag.DELETED;
 import static org.apache.james.mailbox.cassandra.table.Flag.DRAFT;
@@ -49,17 +43,15 @@ import static org.apache.james.mailbox.cassandra.table.Flag.RECENT;
 import static org.apache.james.mailbox.cassandra.table.Flag.SEEN;
 import static org.apache.james.mailbox.cassandra.table.Flag.USER;
 import static org.apache.james.mailbox.cassandra.table.Flag.USER_FLAGS;
-import static org.apache.james.mailbox.cassandra.table.Flag.USER_FLAGS_LOWERCASE;
 import static org.apache.james.mailbox.cassandra.table.MessageIdToImapUid.MOD_SEQ;
-import static org.apache.james.mailbox.cassandra.table.MessageIdToImapUid.MOD_SEQ_LOWERCASE;
-import static org.apache.james.mailbox.cassandra.table.MessageIdToImapUid.THREAD_ID_LOWERCASE;
 import static org.apache.james.util.ReactorUtils.publishIfPresent;
 
 import java.time.Duration;
 import java.util.Date;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 import javax.inject.Inject;
 import javax.mail.Flags;
@@ -80,10 +72,12 @@ import org.apache.james.mailbox.model.UpdatedFlags;
 import org.apache.james.util.streams.Limit;
 
 import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.ProtocolVersion;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.BoundStatementBuilder;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
 import com.datastax.oss.driver.api.core.cql.Row;
+import com.datastax.oss.driver.api.core.type.codec.TypeCodecs;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
@@ -95,6 +89,20 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 public class CassandraMessageIdDAO {
+    private static class MemoizedSupplier<T> {
+        private final AtomicReference<T> value = new AtomicReference<>();
+
+        T get(Supplier<T> initializer) {
+            T result = value.get();
+            if (result == null) {
+                T initialValue = initializer.get();
+                value.set(initialValue);
+                return initialValue;
+            }
+            return result;
+        }
+    }
+
     private static final String IMAP_UID_GTE = IMAP_UID + "_GTE";
     private static final String IMAP_UID_LTE = IMAP_UID + "_LTE";
     public static final String LIMIT = "LIMIT_BIND_MARKER";
@@ -118,10 +126,13 @@ public class CassandraMessageIdDAO {
     private final PreparedStatement selectUidRangeLimited;
     private final PreparedStatement update;
     private final PreparedStatement listStatement;
+    private final ProtocolVersion protocolVersion;
 
     @Inject
     public CassandraMessageIdDAO(CqlSession session, BlobId.Factory blobIdFactory) {
         this.cassandraAsyncExecutor = new CassandraAsyncExecutor(session);
+        this.protocolVersion = session.getContext().getProtocolVersion();
+
         this.blobIdFactory = blobIdFactory;
         this.delete = prepareDelete(session);
         this.insert = prepareInsert(session);
@@ -261,16 +272,16 @@ public class CassandraMessageIdDAO {
             QueryBuilder.selectFrom(TABLE_NAME)
                 .columns(IMAP_UID,
                     MESSAGE_ID,
-                    THREAD_ID_LOWERCASE,
-                    ANSWERED.toLowerCase(Locale.US),
-                    DELETED.toLowerCase(Locale.US),
-                    DRAFT.toLowerCase(Locale.US),
-                    RECENT.toLowerCase(Locale.US),
-                    SEEN.toLowerCase(Locale.US),
-                    FLAGGED.toLowerCase(Locale.US),
-                    USER.toLowerCase(Locale.US),
-                    USER_FLAGS_LOWERCASE,
-                    MOD_SEQ_LOWERCASE)
+                    THREAD_ID,
+                    ANSWERED,
+                    DELETED,
+                    DRAFT,
+                    RECENT,
+                    SEEN,
+                    FLAGGED,
+                    USER,
+                    USER_FLAGS,
+                    MOD_SEQ)
                 .where(column(MAILBOX_ID).isEqualTo(bindMarker(MAILBOX_ID)),
                     column(IMAP_UID).isGreaterThanOrEqualTo(bindMarker(IMAP_UID_GTE)),
                     column(IMAP_UID).isLessThanOrEqualTo(bindMarker(IMAP_UID_LTE)))
@@ -281,7 +292,7 @@ public class CassandraMessageIdDAO {
         return session.prepare(
             QueryBuilder.selectFrom(TABLE_NAME)
                 .columns(IMAP_UID,
-                    DELETED.toLowerCase(Locale.US))
+                    DELETED)
                 .where(column(MAILBOX_ID).isEqualTo(bindMarker(MAILBOX_ID)),
                     column(IMAP_UID).isGreaterThanOrEqualTo(bindMarker(IMAP_UID_GTE)),
                     column(IMAP_UID).isLessThanOrEqualTo(bindMarker(IMAP_UID_LTE)))
@@ -300,7 +311,7 @@ public class CassandraMessageIdDAO {
 
     public Mono<Void> delete(CassandraId mailboxId, MessageUid uid) {
         return cassandraAsyncExecutor.executeVoid(delete.bind()
-            .setUuid(MAILBOX_ID, mailboxId.asUuid())
+            .set(MAILBOX_ID, mailboxId.asUuid(), TypeCodecs.TIMEUUID)
             .setLong(IMAP_UID, uid.asLong()));
     }
 
@@ -318,7 +329,7 @@ public class CassandraMessageIdDAO {
             statementBuilder.setSet(USER_FLAGS, ImmutableSet.copyOf(flags.getUserFlags()), String.class);
         }
         return cassandraAsyncExecutor.executeVoid(statementBuilder
-            .setUuid(MAILBOX_ID, ((CassandraId) composedMessageId.getMailboxId()).asUuid())
+            .set(MAILBOX_ID, ((CassandraId) composedMessageId.getMailboxId()).asUuid(), TypeCodecs.TIMEUUID)
             .setLong(IMAP_UID, composedMessageId.getUid().asLong())
             .setUuid(MESSAGE_ID, ((CassandraMessageId) composedMessageId.getMessageId()).get())
             .setUuid(THREAD_ID, ((CassandraMessageId) threadId.getBaseMessageId()).get())
@@ -413,7 +424,7 @@ public class CassandraMessageIdDAO {
 
     private Mono<Row> selectOneRow(CassandraId mailboxId, MessageUid uid) {
         return cassandraAsyncExecutor.executeSingleRow(select.bind()
-            .setUuid(MAILBOX_ID, mailboxId.asUuid())
+            .set(MAILBOX_ID, mailboxId.asUuid(), TypeCodecs.TIMEUUID)
             .setLong(IMAP_UID, uid.asLong()));
     }
 
@@ -425,43 +436,48 @@ public class CassandraMessageIdDAO {
 
     public Flux<MessageUid> listUids(CassandraId mailboxId) {
         return cassandraAsyncExecutor.executeRows(selectAllUids.bind()
-                .setUuid(MAILBOX_ID, mailboxId.asUuid()))
-            .map(row -> MessageUid.of(row.getLong(IMAP_UID)));
+                .set(MAILBOX_ID, mailboxId.asUuid(), TypeCodecs.TIMEUUID))
+            .map(row -> MessageUid.of(TypeCodecs.BIGINT.decodePrimitive(row.getBytesUnsafe(0), protocolVersion)));
     }
 
     public Flux<ComposedMessageIdWithMetaData> listMessagesMetadata(CassandraId mailboxId, MessageRange range) {
         return cassandraAsyncExecutor.executeRows(selectMetadataRange.bind()
-                .setUuid(MAILBOX_ID, mailboxId.asUuid())
+                .set(MAILBOX_ID, mailboxId.asUuid(), TypeCodecs.TIMEUUID)
                 .setLong(IMAP_UID_GTE, range.getUidFrom().asLong())
                 .setLong(IMAP_UID_LTE, range.getUidTo().asLong()))
             .map(row -> {
-                CassandraMessageId messageId = CassandraMessageId.Factory.of(row.getUuid(MESSAGE_ID_LOWERCASE));
+                CassandraMessageId messageId = CassandraMessageId.Factory.of(row.get(MESSAGE_ID, TypeCodecs.TIMEUUID));
                 return ComposedMessageIdWithMetaData.builder()
-                    .modSeq(ModSeq.of(row.getLong(MOD_SEQ_LOWERCASE)))
+                    .modSeq(ModSeq.of(TypeCodecs.BIGINT.decodePrimitive(row.getBytesUnsafe(MOD_SEQ), protocolVersion)))
                     .threadId(getThreadIdFromRow(row, messageId))
                     .flags(FlagsExtractor.getFlags(row))
                     .composedMessageId(new ComposedMessageId(mailboxId,
                         messageId,
-                        MessageUid.of(row.getLong(IMAP_UID))))
+                        MessageUid.of(TypeCodecs.BIGINT.decodePrimitive(row.getBytesUnsafe(IMAP_UID), protocolVersion))))
                     .build();
             });
     }
 
     public Flux<MessageUid> listNotDeletedUids(CassandraId mailboxId, MessageRange range) {
+        MemoizedSupplier<Integer> deletedPosition = new MemoizedSupplier<>();
+        MemoizedSupplier<Integer> uidPosition = new MemoizedSupplier<>();
+
         return cassandraAsyncExecutor.executeRows(selectNotDeletedRange.bind()
-                .setUuid(MAILBOX_ID, mailboxId.asUuid())
+                .set(MAILBOX_ID, mailboxId.asUuid(), TypeCodecs.TIMEUUID)
                 .setLong(IMAP_UID_GTE, range.getUidFrom().asLong())
                 .setLong(IMAP_UID_LTE, range.getUidTo().asLong()))
-            .filter(row -> !row.getBoolean(org.apache.james.mailbox.cassandra.table.Flag.DELETED))
-            .map(row -> MessageUid.of(row.getLong(IMAP_UID)));
+            .filter(row -> !TypeCodecs.BOOLEAN.decodePrimitive(
+                row.getBytesUnsafe(deletedPosition.get(() -> row.getColumnDefinitions().firstIndexOf(DELETED))), protocolVersion))
+            .map(row -> MessageUid.of(TypeCodecs.BIGINT.decodePrimitive(
+                row.getBytesUnsafe(uidPosition.get(() -> row.getColumnDefinitions().firstIndexOf(IMAP_UID))), protocolVersion)));
     }
 
     private Flux<MessageUid> doListUids(CassandraId mailboxId, MessageRange range) {
         return cassandraAsyncExecutor.executeRows(selectUidOnlyRange.bind()
-                .setUuid(MAILBOX_ID, mailboxId.asUuid())
+                .set(MAILBOX_ID, mailboxId.asUuid(), TypeCodecs.TIMEUUID)
                 .setLong(IMAP_UID_GTE, range.getUidFrom().asLong())
                 .setLong(IMAP_UID_LTE, range.getUidTo().asLong()))
-            .map(row -> MessageUid.of(row.getLong(IMAP_UID)));
+            .map(row -> MessageUid.of(TypeCodecs.BIGINT.decodePrimitive(row.getBytesUnsafe(0), protocolVersion)));
     }
 
     public Flux<MessageUid> listUids(CassandraId mailboxId, MessageRange range) {
@@ -495,68 +511,69 @@ public class CassandraMessageIdDAO {
     private Flux<Row> selectAll(CassandraId mailboxId, Limit limit) {
         return cassandraAsyncExecutor.executeRows(limit.getLimit()
             .map(limitAsInt -> selectAllLimited.bind()
-                .setUuid(MAILBOX_ID, mailboxId.asUuid())
+                .set(MAILBOX_ID, mailboxId.asUuid(), TypeCodecs.TIMEUUID)
                 .setInt(LIMIT, limitAsInt))
             .orElseGet(() -> selectAll.bind()
-                .setUuid(MAILBOX_ID, mailboxId.asUuid())));
+                .set(MAILBOX_ID, mailboxId.asUuid(), TypeCodecs.TIMEUUID)));
     }
 
     private Flux<Row> selectFrom(CassandraId mailboxId, MessageUid uid, Limit limit) {
         return cassandraAsyncExecutor.executeRows(limit.getLimit()
             .map(limitAsInt -> selectUidGteLimited.bind()
-                .setUuid(MAILBOX_ID, mailboxId.asUuid())
+                .set(MAILBOX_ID, mailboxId.asUuid(), TypeCodecs.TIMEUUID)
                 .setLong(IMAP_UID, uid.asLong())
                 .setInt(LIMIT, limitAsInt))
             .orElseGet(() -> selectUidGte.bind()
-                .setUuid(MAILBOX_ID, mailboxId.asUuid())
+                .set(MAILBOX_ID, mailboxId.asUuid(), TypeCodecs.TIMEUUID)
                 .setLong(IMAP_UID, uid.asLong())));
     }
 
     private Flux<Row> selectRange(CassandraId mailboxId, MessageUid from, MessageUid to, Limit limit) {
         return cassandraAsyncExecutor.executeRows(limit.getLimit()
             .map(limitAsInt -> selectUidRangeLimited.bind()
-                .setUuid(MAILBOX_ID, mailboxId.asUuid())
+                .set(MAILBOX_ID, mailboxId.asUuid(), TypeCodecs.TIMEUUID)
                 .setLong(IMAP_UID_GTE, from.asLong())
                 .setLong(IMAP_UID_LTE, to.asLong())
                 .setInt(LIMIT, limitAsInt))
             .orElseGet(() -> selectUidRange.bind()
-                .setUuid(MAILBOX_ID, mailboxId.asUuid())
+                .set(MAILBOX_ID, mailboxId.asUuid(), TypeCodecs.TIMEUUID)
                 .setLong(IMAP_UID_GTE, from.asLong())
                 .setLong(IMAP_UID_LTE, to.asLong())));
     }
 
     private Optional<CassandraMessageMetadata> fromRowToComposedMessageIdWithFlags(Row row) {
-        if (row.getUuid(MESSAGE_ID) == null) {
+        UUID rowAsUuid = row.get(MESSAGE_ID, TypeCodecs.TIMEUUID);
+        if (rowAsUuid == null) {
             // Out of order updates with concurrent deletes can result in the row being partially deleted
             // We filter out such records, and cleanup them.
-            delete(CassandraId.of(row.getUuid(MAILBOX_ID)),
+            delete(CassandraId.of(row.get(MAILBOX_ID, TypeCodecs.TIMEUUID)),
                 MessageUid.of(row.getLong(IMAP_UID)))
                 .subscribeOn(Schedulers.parallel())
                 .subscribe();
             return Optional.empty();
         }
-        final CassandraMessageId messageId = CassandraMessageId.Factory.of(row.getUuid(MESSAGE_ID_LOWERCASE));
+        CassandraMessageId messageId = CassandraMessageId.Factory.of(rowAsUuid);
         return Optional.of(CassandraMessageMetadata.builder()
             .ids(ComposedMessageIdWithMetaData.builder()
                 .composedMessageId(new ComposedMessageId(
-                    CassandraId.of(row.getUuid(MAILBOX_ID_LOWERCASE)),
+                    CassandraId.of(row.get(MAILBOX_ID, TypeCodecs.TIMEUUID)),
                     messageId,
                     MessageUid.of(row.getLong(IMAP_UID))))
                 .flags(FlagsExtractor.getFlags(row))
-                .modSeq(ModSeq.of(row.getLong(MOD_SEQ_LOWERCASE)))
+                .modSeq(ModSeq.of(row.getLong(MOD_SEQ)))
                 .threadId(getThreadIdFromRow(row, messageId))
                 .build())
-            .bodyStartOctet(row.get(BODY_START_OCTET_LOWERCASE, Integer.class))
-            .internalDate(Optional.ofNullable(row.getInstant(INTERNAL_DATE_LOWERCASE))
+            .bodyStartOctet(row.get(BODY_START_OCTET, Integer.class))
+            .internalDate(Optional.ofNullable(row.get(INTERNAL_DATE, TypeCodecs.TIMESTAMP))
                 .map(Date::from))
-            .size(row.get(FULL_CONTENT_OCTETS_LOWERCASE, Long.class))
-            .headerContent(Optional.ofNullable(row.getString(HEADER_CONTENT_LOWERCASE))
+            .size(row.get(FULL_CONTENT_OCTETS, Long.class))
+            .headerContent(Optional.ofNullable(row.get(HEADER_CONTENT, TypeCodecs.TEXT))
                 .map(blobIdFactory::from))
             .build());
     }
 
     private ThreadId getThreadIdFromRow(Row row, MessageId messageId) {
-        UUID threadIdUUID = row.getUuid(THREAD_ID_LOWERCASE);
+        UUID threadIdUUID = row.get(THREAD_ID, TypeCodecs.TIMEUUID);
         if (threadIdUUID == null) {
             return ThreadId.fromBaseMessageId(messageId);
         }

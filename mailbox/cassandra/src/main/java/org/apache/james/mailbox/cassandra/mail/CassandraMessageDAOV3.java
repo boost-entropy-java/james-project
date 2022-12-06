@@ -35,16 +35,11 @@ import static org.apache.james.blob.api.BlobStore.StoragePolicy.SIZE_BASED;
 import static org.apache.james.mailbox.cassandra.table.CassandraMessageIds.MESSAGE_ID;
 import static org.apache.james.mailbox.cassandra.table.CassandraMessageV3Table.ATTACHMENTS;
 import static org.apache.james.mailbox.cassandra.table.CassandraMessageV3Table.BODY_CONTENT;
-import static org.apache.james.mailbox.cassandra.table.CassandraMessageV3Table.BODY_CONTENT_LOWERCASE;
 import static org.apache.james.mailbox.cassandra.table.CassandraMessageV3Table.BODY_OCTECTS;
 import static org.apache.james.mailbox.cassandra.table.CassandraMessageV3Table.BODY_START_OCTET;
-import static org.apache.james.mailbox.cassandra.table.CassandraMessageV3Table.BODY_START_OCTET_LOWERCASE;
 import static org.apache.james.mailbox.cassandra.table.CassandraMessageV3Table.FULL_CONTENT_OCTETS;
-import static org.apache.james.mailbox.cassandra.table.CassandraMessageV3Table.FULL_CONTENT_OCTETS_LOWERCASE;
 import static org.apache.james.mailbox.cassandra.table.CassandraMessageV3Table.HEADER_CONTENT;
-import static org.apache.james.mailbox.cassandra.table.CassandraMessageV3Table.HEADER_CONTENT_LOWERCASE;
 import static org.apache.james.mailbox.cassandra.table.CassandraMessageV3Table.INTERNAL_DATE;
-import static org.apache.james.mailbox.cassandra.table.CassandraMessageV3Table.INTERNAL_DATE_LOWERCASE;
 import static org.apache.james.mailbox.cassandra.table.CassandraMessageV3Table.Properties.CONTENT_DESCRIPTION;
 import static org.apache.james.mailbox.cassandra.table.CassandraMessageV3Table.Properties.CONTENT_DISPOSITION_PARAMETERS;
 import static org.apache.james.mailbox.cassandra.table.CassandraMessageV3Table.Properties.CONTENT_DISPOSITION_TYPE;
@@ -58,7 +53,6 @@ import static org.apache.james.mailbox.cassandra.table.CassandraMessageV3Table.P
 import static org.apache.james.mailbox.cassandra.table.CassandraMessageV3Table.Properties.SUB_TYPE;
 import static org.apache.james.mailbox.cassandra.table.CassandraMessageV3Table.TABLE_NAME;
 import static org.apache.james.mailbox.cassandra.table.CassandraMessageV3Table.TEXTUAL_LINE_COUNT;
-import static org.apache.james.mailbox.cassandra.table.CassandraMessageV3Table.TEXTUAL_LINE_COUNT_LOWERCASE;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -66,13 +60,11 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.stream.Stream;
 
 import javax.inject.Inject;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.james.backends.cassandra.init.CassandraTypesProvider;
-import org.apache.james.backends.cassandra.init.configuration.JamesExecutionProfiles;
 import org.apache.james.backends.cassandra.utils.CassandraAsyncExecutor;
 import org.apache.james.blob.api.BlobId;
 import org.apache.james.blob.api.BlobStore;
@@ -91,8 +83,8 @@ import org.apache.james.mailbox.store.mail.model.MailboxMessage;
 import org.apache.james.mailbox.store.mail.model.impl.Properties;
 import org.apache.james.mailbox.store.mail.model.impl.PropertyBuilder;
 
+import com.datastax.oss.driver.api.core.CqlIdentifier;
 import com.datastax.oss.driver.api.core.CqlSession;
-import com.datastax.oss.driver.api.core.config.DriverExecutionProfile;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.BoundStatementBuilder;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
@@ -100,6 +92,7 @@ import com.datastax.oss.driver.api.core.cql.Row;
 import com.datastax.oss.driver.api.core.data.UdtValue;
 import com.datastax.oss.driver.api.core.type.UserDefinedType;
 import com.datastax.oss.driver.api.core.type.codec.TypeCodec;
+import com.datastax.oss.driver.api.core.type.codec.TypeCodecs;
 import com.datastax.oss.driver.api.core.type.codec.registry.CodecRegistry;
 import com.google.common.collect.ImmutableList;
 import com.google.common.io.ByteSource;
@@ -122,14 +115,13 @@ public class CassandraMessageDAOV3 {
     private final PreparedStatement select;
     private final PreparedStatement listBlobs;
     private final Cid.CidParser cidParser;
-    private final DriverExecutionProfile lwtProfile;
     private final UserDefinedType attachmentsType;
+    private final TypeCodec<List<UdtValue>> attachmentCodec;
 
     @Inject
     public CassandraMessageDAOV3(CqlSession session, CassandraTypesProvider typesProvider, BlobStore blobStore,
                                  BlobId.Factory blobIdFactory) {
         this.cassandraAsyncExecutor = new CassandraAsyncExecutor(session);
-        this.lwtProfile = JamesExecutionProfiles.getLWTProfile(session);
         this.blobStore = blobStore;
         this.blobIdFactory = blobIdFactory;
 
@@ -138,7 +130,8 @@ public class CassandraMessageDAOV3 {
         this.select = prepareSelect(session);
         this.listBlobs = prepareSelectBlobs(session);
         this.cidParser = Cid.parser().relaxed();
-        this.attachmentsType = typesProvider.getDefinedUserType(ATTACHMENTS);
+        this.attachmentsType = typesProvider.getDefinedUserType(ATTACHMENTS.asCql(true));
+        this.attachmentCodec = CodecRegistry.DEFAULT.codecFor(listOf(attachmentsType));
     }
 
     private PreparedStatement prepareSelect(CqlSession session) {
@@ -209,9 +202,9 @@ public class CassandraMessageDAOV3 {
             .setString(CONTENT_MD5, message.getProperties().getContentMD5())
             .setString(CONTENT_TRANSFER_ENCODING, message.getProperties().getContentTransferEncoding())
             .setString(CONTENT_LOCATION, message.getProperties().getContentLocation())
-            .setList(CONTENT_LANGUAGE, message.getProperties().getContentLanguage(), String.class)
-            .setMap(CONTENT_DISPOSITION_PARAMETERS, message.getProperties().getContentDispositionParameters(), String.class, String.class)
-            .setMap(CONTENT_TYPE_PARAMETERS, message.getProperties().getContentTypeParameters(), String.class, String.class);
+            .set(CONTENT_LANGUAGE, message.getProperties().getContentLanguage(), LIST_OF_STRINGS_CODEC)
+            .set(CONTENT_DISPOSITION_PARAMETERS, message.getProperties().getContentDispositionParameters(), MAP_OF_STRINGS_CODEC)
+            .set(CONTENT_TYPE_PARAMETERS, message.getProperties().getContentTypeParameters(), MAP_OF_STRINGS_CODEC);
 
         if (message.getAttachments().isEmpty()) {
             return cassandraAsyncExecutor.executeVoid(boundStatement.unset(ATTACHMENTS).build());
@@ -268,9 +261,9 @@ public class CassandraMessageDAOV3 {
             .setString(CONTENT_MD5, message.getProperties().getContentMD5())
             .setString(CONTENT_TRANSFER_ENCODING, message.getProperties().getContentTransferEncoding())
             .setString(CONTENT_LOCATION, message.getProperties().getContentLocation())
-            .setList(CONTENT_LANGUAGE, message.getProperties().getContentLanguage(), String.class)
-            .setMap(CONTENT_DISPOSITION_PARAMETERS, message.getProperties().getContentDispositionParameters(), String.class, String.class)
-            .setMap(CONTENT_TYPE_PARAMETERS, message.getProperties().getContentTypeParameters(), String.class, String.class);
+            .set(CONTENT_LANGUAGE, message.getProperties().getContentLanguage(), LIST_OF_STRINGS_CODEC)
+            .set(CONTENT_DISPOSITION_PARAMETERS, message.getProperties().getContentDispositionParameters(), MAP_OF_STRINGS_CODEC)
+            .set(CONTENT_TYPE_PARAMETERS, message.getProperties().getContentTypeParameters(), MAP_OF_STRINGS_CODEC);
 
         if (message.getAttachments().isEmpty()) {
             return boundStatement.unset(ATTACHMENTS);
@@ -336,8 +329,7 @@ public class CassandraMessageDAOV3 {
     private Mono<Row> retrieveRow(CassandraMessageId messageId) {
         return cassandraAsyncExecutor.executeSingleRow(select
             .bind()
-            .setUuid(MESSAGE_ID, messageId.get())
-            .setExecutionProfile(lwtProfile));
+            .set(MESSAGE_ID, messageId.get(), TypeCodecs.TIMEUUID));
     }
 
     private Mono<MessageRepresentation> message(Row row, CassandraMessageId cassandraMessageId, FetchType fetchType) {
@@ -348,48 +340,50 @@ public class CassandraMessageDAOV3 {
             .map(content ->
                 new MessageRepresentation(
                     cassandraMessageId,
-                    Optional.ofNullable(row.getInstant(INTERNAL_DATE_LOWERCASE)).map(Date::from).orElse(null),
-                    row.getLong(FULL_CONTENT_OCTETS_LOWERCASE),
-                    row.getInt(BODY_START_OCTET_LOWERCASE),
+                    Optional.ofNullable(row.get(INTERNAL_DATE, TypeCodecs.TIMESTAMP)).map(Date::from).orElse(null),
+                    row.getLong(FULL_CONTENT_OCTETS),
+                    row.getInt(BODY_START_OCTET),
                     content,
                     getProperties(row),
-                    getAttachments(row).collect(ImmutableList.toImmutableList()),
+                    getAttachments(row),
                     headerId,
                     bodyId));
     }
 
     private Properties getProperties(Row row) {
         PropertyBuilder property = new PropertyBuilder();
-        property.setContentDescription(row.getString(CONTENT_DESCRIPTION));
-        property.setContentDispositionType(row.getString(CONTENT_DISPOSITION_TYPE));
-        property.setMediaType(row.getString(MEDIA_TYPE));
-        property.setSubType(row.getString(SUB_TYPE));
-        property.setContentID(row.getString(CONTENT_ID));
-        property.setContentMD5(row.getString(CONTENT_MD5));
-        property.setContentTransferEncoding(row.getString(CONTENT_TRANSFER_ENCODING));
-        property.setContentLocation(row.getString(CONTENT_LOCATION));
+        property.setContentDescription(row.get(CONTENT_DESCRIPTION, TypeCodecs.TEXT));
+        property.setContentDispositionType(row.get(CONTENT_DISPOSITION_TYPE, TypeCodecs.TEXT));
+        property.setMediaType(row.get(MEDIA_TYPE, TypeCodecs.TEXT));
+        property.setSubType(row.get(SUB_TYPE, TypeCodecs.TEXT));
+        property.setContentID(row.get(CONTENT_ID, TypeCodecs.TEXT));
+        property.setContentMD5(row.get(CONTENT_MD5, TypeCodecs.TEXT));
+        property.setContentTransferEncoding(row.get(CONTENT_TRANSFER_ENCODING, TypeCodecs.TEXT));
+        property.setContentLocation(row.get(CONTENT_LOCATION, TypeCodecs.TEXT));
         property.setContentLanguage(row.get(CONTENT_LANGUAGE, LIST_OF_STRINGS_CODEC));
         property.setContentDispositionParameters(row.get(CONTENT_DISPOSITION_PARAMETERS, MAP_OF_STRINGS_CODEC));
         property.setContentTypeParameters(row.get(CONTENT_TYPE_PARAMETERS, MAP_OF_STRINGS_CODEC));
-        property.setTextualLineCount(row.getLong(TEXTUAL_LINE_COUNT_LOWERCASE));
+        property.setTextualLineCount(row.getLong(TEXTUAL_LINE_COUNT));
         return property.build();
     }
 
-    private Stream<MessageAttachmentRepresentation> getAttachments(Row row) {
-        List<UdtValue> udtValues = Optional.<List<UdtValue>>ofNullable(row.get(ATTACHMENTS, CodecRegistry.DEFAULT.codecFor(listOf(attachmentsType)))).orElse(List.of());
-        return attachmentByIds(udtValues);
+    private List<MessageAttachmentRepresentation> getAttachments(Row row) {
+        return Optional.ofNullable(row.get(ATTACHMENTS, attachmentCodec))
+            .map(this::attachmentByIds)
+            .orElseGet(ImmutableList::of);
     }
 
-    private Stream<MessageAttachmentRepresentation> attachmentByIds(List<UdtValue> udtValues) {
+    private List<MessageAttachmentRepresentation> attachmentByIds(List<UdtValue> udtValues) {
         return udtValues.stream()
-            .map(this::messageAttachmentByIdFrom);
+            .map(this::messageAttachmentByIdFrom)
+            .collect(ImmutableList.toImmutableList());
     }
 
     private MessageAttachmentRepresentation messageAttachmentByIdFrom(UdtValue udtValue) {
         return MessageAttachmentRepresentation.builder()
-            .attachmentId(AttachmentId.from(udtValue.getString(Attachments.ID)))
-            .name(udtValue.getString(Attachments.NAME))
-            .cid(cidParser.parse(udtValue.getString(Attachments.CID)))
+            .attachmentId(AttachmentId.from(udtValue.get(Attachments.ID, TypeCodecs.TEXT)))
+            .name(udtValue.get(Attachments.NAME, TypeCodecs.TEXT))
+            .cid(cidParser.parse(udtValue.get(Attachments.CID, TypeCodecs.TEXT)))
             .isInline(udtValue.getBoolean(Attachments.IS_INLINE))
             .build();
     }
@@ -422,14 +416,14 @@ public class CassandraMessageDAOV3 {
         return Mono.from(blobStore.readBytes(blobStore.getDefaultBucketName(), blobId, storagePolicy));
     }
 
-    private BlobId retrieveBlobId(String field, Row row) {
-        return blobIdFactory.from(row.getString(field));
+    private BlobId retrieveBlobId(CqlIdentifier field, Row row) {
+        return blobIdFactory.from(row.get(field, TypeCodecs.TEXT));
     }
 
     Flux<BlobId> listBlobs() {
         return cassandraAsyncExecutor.executeRows(listBlobs.bind())
             .flatMapIterable(row -> ImmutableList.of(
-                blobIdFactory.from(row.getString(HEADER_CONTENT_LOWERCASE)),
-                blobIdFactory.from(row.getString(BODY_CONTENT_LOWERCASE))));
+                blobIdFactory.from(row.get(HEADER_CONTENT, TypeCodecs.TEXT)),
+                blobIdFactory.from(row.get(BODY_CONTENT, TypeCodecs.TEXT))));
     }
 }

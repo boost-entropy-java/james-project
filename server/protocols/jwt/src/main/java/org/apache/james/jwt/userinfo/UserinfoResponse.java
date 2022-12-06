@@ -17,20 +17,45 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.mailbox.cassandra.table;
+package org.apache.james.jwt.userinfo;
 
-public interface CassandraMailboxPathV2Table {
+import java.util.Optional;
 
-    String TABLE_NAME = "mailboxPathV2";
+import com.fasterxml.jackson.databind.JsonNode;
 
-    String NAMESPACE = "namespace";
+public class UserinfoResponse {
+    private final String sub;
+    private final Optional<String> preferredUsername;
+    private final Optional<String> email;
 
-    String USER = "user";
+    private final JsonNode json;
 
-    String MAILBOX_NAME = "mailboxName";
+    public UserinfoResponse(JsonNode json) {
+        this.json = json;
+        this.preferredUsername = Optional.ofNullable(json.get("preferred_username"))
+            .map(JsonNode::asText);
 
-    String MAILBOX_ID = "mailboxId";
+        this.sub = Optional.ofNullable(json.get("sub"))
+            .map(JsonNode::asText).orElse(null);
 
-    String[] FIELDS = { NAMESPACE, USER, MAILBOX_NAME, MAILBOX_ID};
+        this.email = Optional.ofNullable(json.get("email"))
+            .map(JsonNode::asText);
+    }
 
+    public String getSub() {
+        return sub;
+    }
+
+    public Optional<String> getPreferredUsername() {
+        return preferredUsername;
+    }
+
+    public Optional<String> getEmail() {
+        return email;
+    }
+
+    public Optional<String> claimByPropertyName(String propertyName) {
+        return Optional.ofNullable(json.get(propertyName))
+            .map(JsonNode::asText);
+    }
 }

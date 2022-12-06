@@ -48,7 +48,9 @@ import org.apache.james.mailbox.store.mail.UidProvider;
 
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.config.DriverExecutionProfile;
+import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
+import com.datastax.oss.driver.api.core.type.codec.TypeCodecs;
 import com.google.common.collect.ImmutableList;
 
 import reactor.core.publisher.Mono;
@@ -65,6 +67,7 @@ public class CassandraUidProvider implements UidProvider {
     private final PreparedStatement selectStatement;
     private final DriverExecutionProfile lwtProfile;
     private final RetryBackoffSpec retrySpec;
+    private final CassandraConfiguration cassandraConfiguration;
 
     @Inject
     public CassandraUidProvider(CqlSession session, CassandraConfiguration cassandraConfiguration) {
@@ -76,6 +79,7 @@ public class CassandraUidProvider implements UidProvider {
         Duration firstBackoff = Duration.ofMillis(10);
         this.retrySpec = Retry.backoff(cassandraConfiguration.getUidMaxRetry(), firstBackoff)
             .scheduler(Schedulers.parallel());
+        this.cassandraConfiguration = cassandraConfiguration;
     }
 
     private PreparedStatement prepareSelect(CqlSession session) {
@@ -117,7 +121,7 @@ public class CassandraUidProvider implements UidProvider {
     @Override
     public Mono<MessageUid> nextUidReactive(MailboxId mailboxId) {
         CassandraId cassandraId = (CassandraId) mailboxId;
-        Mono<MessageUid> updateUid = findHighestUid(cassandraId)
+        Mono<MessageUid> updateUid = findHighestUid(cassandraId, Optional.of(lwtProfile))
             .flatMap(messageUid -> tryUpdateUid(cassandraId, messageUid));
 
         return updateUid
@@ -131,7 +135,7 @@ public class CassandraUidProvider implements UidProvider {
     public Mono<List<MessageUid>> nextUids(MailboxId mailboxId, int count) {
         CassandraId cassandraId = (CassandraId) mailboxId;
 
-        Mono<List<MessageUid>> updateUid = findHighestUid(cassandraId)
+        Mono<List<MessageUid>> updateUid = findHighestUid(cassandraId, Optional.of(lwtProfile))
             .flatMap(messageUid -> tryUpdateUid(cassandraId, messageUid, count)
                 .map(highest -> range(messageUid, highest)));
 
@@ -151,23 +155,24 @@ public class CassandraUidProvider implements UidProvider {
 
     @Override
     public Optional<MessageUid> lastUid(Mailbox mailbox) {
-        return findHighestUid((CassandraId) mailbox.getMailboxId())
+        return findHighestUid((CassandraId) mailbox.getMailboxId(), Optional.of(lwtProfile).filter(any -> cassandraConfiguration.isUidReadStrongConsistency()))
             .blockOptional();
     }
 
     @Override
     public Mono<Optional<MessageUid>> lastUidReactive(Mailbox mailbox) {
-        return findHighestUid((CassandraId) mailbox.getMailboxId())
+        return findHighestUid((CassandraId) mailbox.getMailboxId(), Optional.of(lwtProfile).filter(any -> cassandraConfiguration.isUidReadStrongConsistency()))
             .map(Optional::of)
             .switchIfEmpty(Mono.just(Optional.empty()));
     }
 
-    private Mono<MessageUid> findHighestUid(CassandraId mailboxId) {
+    private Mono<MessageUid> findHighestUid(CassandraId mailboxId, Optional<DriverExecutionProfile> executionProfile) {
+        BoundStatement statement = selectStatement.bind()
+            .set(MAILBOX_ID, mailboxId.asUuid(), TypeCodecs.TIMEUUID);
         return executor.executeSingleRow(
-                selectStatement.bind()
-                    .setUuid(MAILBOX_ID, mailboxId.asUuid())
-                    .setExecutionProfile(lwtProfile))
-            .map(row -> MessageUid.of(row.getLong(NEXT_UID)));
+            executionProfile.map(statement::setExecutionProfile)
+                .orElse(statement))
+            .map(row -> MessageUid.of(row.getLong(0)));
     }
 
     private Mono<MessageUid> tryUpdateUid(CassandraId mailboxId, MessageUid uid) {
@@ -178,7 +183,7 @@ public class CassandraUidProvider implements UidProvider {
         MessageUid nextUid = uid.next(count);
         return executor.executeReturnApplied(
                 updateStatement.bind()
-                    .setUuid(MAILBOX_ID, mailboxId.asUuid())
+                    .set(MAILBOX_ID, mailboxId.asUuid(), TypeCodecs.TIMEUUID)
                     .setLong(CONDITION, uid.asLong())
                     .setLong(NEXT_UID, nextUid.asLong()))
             .map(success -> successToUid(nextUid, success))
