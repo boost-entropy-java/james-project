@@ -34,7 +34,9 @@ public class ListRequest extends AbstractImapRequest {
     public enum ListSelectOption {
         REMOTE,
         RECURSIVEMATCH,
-        SUBSCRIBED
+        SUBSCRIBED,
+        // https://www.rfc-editor.org/rfc/rfc6154.html
+        SPECIAL_USE
     }
 
     // https://www.rfc-editor.org/rfc/rfc5258.html
@@ -42,7 +44,11 @@ public class ListRequest extends AbstractImapRequest {
         CHILDREN,
         SUBSCRIBED,
         // https://www.rfc-editor.org/rfc/rfc5819.html LIST STATUS
-        STATUS
+        STATUS,
+        // https://www.rfc-editor.org/rfc/rfc8440.html
+        MYRIGHTS,
+        // https://www.rfc-editor.org/rfc/rfc6154.html
+        SPECIAL_USE
     }
 
     private final String baseReferenceName;
