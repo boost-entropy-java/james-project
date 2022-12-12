@@ -25,6 +25,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Objects;
+import java.util.Optional;
 
 import javax.mail.Flags;
 
@@ -180,7 +181,12 @@ public class StoreMessageResultIterator implements MessageResultIterator {
 
         @Override
         public ThreadId getThreadId() {
-            return new ThreadId(messageMetaData.getMessageId());
+            return messageMetaData.getThreadId();
+        }
+
+        @Override
+        public Optional<Date> getSaveDate() {
+            return messageMetaData.getSaveDate();
         }
 
         @Override
