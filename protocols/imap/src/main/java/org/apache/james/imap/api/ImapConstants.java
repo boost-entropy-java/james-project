@@ -73,6 +73,8 @@ public interface ImapConstants {
 
     Capability SUPPORTS_OBJECTID = Capability.of("OBJECTID");
 
+    Capability SUPPORTS_SAVEDATE = Capability.of("SAVEDATE");
+
     Capability SUPPORTS_I18NLEVEL_1 = Capability.of("I18NLEVEL=1");
 
     Capability SUPPORTS_NAMESPACES = Capability.of("NAMESPACE");
@@ -259,4 +261,5 @@ public interface ImapConstants {
     String MESSAGE_QUOTA_RESOURCE = "MESSAGE";
     String EMAILID = "EMAILID";
     String THREADID = "THREADID";
+    String SAVEDATE = "SAVEDATE";
 }
