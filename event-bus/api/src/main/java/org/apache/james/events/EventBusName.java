@@ -17,26 +17,37 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.server;
+package org.apache.james.events;
 
-import javax.inject.Inject;
+import java.util.Objects;
 
-import org.apache.james.CleanupTasksPerformer;
-import org.apache.james.backends.cassandra.init.CassandraTableManager;
-import org.apache.james.backends.cassandra.versions.table.CassandraSchemaVersionTable;
+import com.google.common.base.Preconditions;
 
-public class CassandraTruncateTableTask implements CleanupTasksPerformer.CleanupTask {
-    private final CassandraTableManager tableManager;
+public class EventBusName {
 
-    @Inject
-    public CassandraTruncateTableTask(CassandraTableManager tableManager) {
-        this.tableManager = tableManager;
+    private final String value;
+
+    public EventBusName(String value) {
+        Preconditions.checkNotNull(value);
+        Preconditions.checkArgument(!value.isEmpty());
+        this.value = value;
+    }
+
+    public String value() {
+        return value;
     }
 
     @Override
-    public Result run() {
-        tableManager
-            .clearTables(table -> !table.getName().equals(CassandraSchemaVersionTable.TABLE_NAME));
-        return Result.COMPLETED;
+    public final boolean equals(Object o) {
+        if (o instanceof EventBusName) {
+            EventBusName that = (EventBusName) o;
+            return Objects.equals(this.value, that.value);
+        }
+        return false;
+    }
+
+    @Override
+    public final int hashCode() {
+        return Objects.hash(value);
     }
 }

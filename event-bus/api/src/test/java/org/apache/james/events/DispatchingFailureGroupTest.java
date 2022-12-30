@@ -17,26 +17,30 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.server;
+package org.apache.james.events;
 
-import javax.inject.Inject;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import org.apache.james.CleanupTasksPerformer;
-import org.apache.james.backends.cassandra.init.CassandraTableManager;
-import org.apache.james.backends.cassandra.versions.table.CassandraSchemaVersionTable;
+import org.junit.jupiter.api.Test;
 
-public class CassandraTruncateTableTask implements CleanupTasksPerformer.CleanupTask {
-    private final CassandraTableManager tableManager;
+public class DispatchingFailureGroupTest {
 
-    @Inject
-    public CassandraTruncateTableTask(CassandraTableManager tableManager) {
-        this.tableManager = tableManager;
+    @Test
+    void asStringShouldReturnEventBusName() {
+        assertThat(new DispatchingFailureGroup(new EventBusName("abc")).asString())
+            .isEqualTo("org.apache.james.events.DispatchingFailureGroup-abc");
     }
 
-    @Override
-    public Result run() {
-        tableManager
-            .clearTables(table -> !table.getName().equals(CassandraSchemaVersionTable.TABLE_NAME));
-        return Result.COMPLETED;
+    @Test
+    void groupDeserializeShouldReturnGroupWhenValidInput() throws Group.GroupDeserializationException {
+        assertThat(Group.deserialize("org.apache.james.events.DispatchingFailureGroup-abc"))
+            .isEqualTo(new DispatchingFailureGroup(new EventBusName("abc")));
+    }
+
+    @Test
+    void deserializeShouldThrowWhenMissingDelimiter() {
+        assertThatThrownBy(() -> Group.deserialize(DispatchingFailureGroup.class.getName()))
+            .isInstanceOf(Group.GroupDeserializationException.class);
     }
 }
