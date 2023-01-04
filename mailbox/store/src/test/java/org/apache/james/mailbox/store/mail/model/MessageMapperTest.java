@@ -81,7 +81,7 @@ public abstract class MessageMapperTest {
 
     protected static final String USER_FLAG = "userFlag";
 
-    private MapperProvider mapperProvider;
+    protected MapperProvider mapperProvider;
     protected MessageMapper messageMapper;
     private MailboxMapper mailboxMapper;
 
