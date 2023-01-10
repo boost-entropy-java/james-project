@@ -597,7 +597,7 @@
 
         <james.groupId>org.apache.james</james.groupId>
         <james.protocols.groupId>${james.groupId}.protocols</james.protocols.groupId>
-        <activemq.version>5.17.2</activemq.version>
+        <activemq.version>5.17.3</activemq.version>
         <apache-mime4j.version>0.8.7</apache-mime4j.version>
         <apache.openjpa.version>3.2.0</apache.openjpa.version>
         <derby.version>10.14.2.0</derby.version>
@@ -607,29 +607,29 @@
         <javax.activation.artifactId>activation</javax.activation.artifactId>
         <jsieve.version>0.8</jsieve.version>
         <spring.version>4.3.25.RELEASE</spring.version>
-        <activmq-artemis.version>2.26.0</activmq-artemis.version>
+        <activmq-artemis.version>2.27.1</activmq-artemis.version>
         <apache-jspf-resolver.version>1.0.1</apache-jspf-resolver.version>
         <javamail.version>1.5.4</javamail.version>
         <javax-activation.version>1.1.1</javax-activation.version>
-        <slf4j.version>2.0.3</slf4j.version>
+        <slf4j.version>2.0.6</slf4j.version>
 
-        <dnsjava.version>3.5.1</dnsjava.version>
+        <dnsjava.version>3.5.2</dnsjava.version>
         <junit.jupiter.version>5.8.2</junit.jupiter.version>
         <junit.platform.version>1.8.2</junit.platform.version>
         <junit.vintage.version>5.8.2</junit.vintage.version>
         <concurrent.version>1.3.4</concurrent.version>
         <xbean-spring.version>4.21</xbean-spring.version>
-        <netty.version>4.1.77.Final</netty.version>
+        <netty.version>4.1.86.Final</netty.version>
         <cucumber.version>2.4.0</cucumber.version>
 
         <pax-logging-api.version>1.6.4</pax-logging-api.version>
-        <jackson.version>2.13.3</jackson.version>
-        <jackson.databind.version>2.13.4.2</jackson.databind.version>
+        <jackson.version>2.14.1</jackson.version>
+        <jackson.databind.version>2.14.1</jackson.databind.version>
         <feign.version>11.10</feign.version>
         <feign-form.version>3.8.0</feign-form.version>
         <jjwt.version>0.11.5</jjwt.version>
-        <metrics.version>4.2.12</metrics.version>
-        <testcontainers.version>1.17.5</testcontainers.version>
+        <metrics.version>4.2.15</metrics.version>
+        <testcontainers.version>1.17.6</testcontainers.version>
         <es.version>2.2.1</es.version>
         <es-reporter.version>6.0.0-RC3</es-reporter.version>
         <guava.version>31.1-jre</guava.version>
@@ -642,7 +642,7 @@
         <maven-plugin-api.version>3.8.5</maven-plugin-api.version>
         <maven-reporting-impl.version>3.1.0</maven-reporting-impl.version>
         <maven-reporting-api.version>3.0</maven-reporting-api.version>
-        <qdox.version>2.0.2</qdox.version>
+        <qdox.version>2.0.3</qdox.version>
         <javax.activation.groupId>javax.activation</javax.activation.groupId>
         <javax.activation.artifactId>activation</javax.activation.artifactId>
         <javax.persistence.version>1.0.2</javax.persistence.version>
@@ -650,9 +650,9 @@
         <lucene.version>3.6.2</lucene.version>
         <jasypt.version>1.9.3</jasypt.version>
         <guice.version>5.1.0</guice.version>
-        <logback.version>1.4.4</logback.version>
+        <logback.version>1.4.5</logback.version>
         <tink.version>1.7.0</tink.version>
-        <lettuce.core.version>6.2.1.RELEASE</lettuce.core.version>
+        <lettuce.core.version>6.2.2.RELEASE</lettuce.core.version>
 
         <bouncycastle.version>1.70</bouncycastle.version>
 
@@ -2120,7 +2120,7 @@
             <dependency>
                 <groupId>com.github.ben-manes.caffeine</groupId>
                 <artifactId>caffeine</artifactId>
-                <version>3.1.1</version>
+                <version>3.1.2</version>
             </dependency>
             <dependency>
                 <groupId>com.github.dpaukov</groupId>
@@ -2194,7 +2194,7 @@
             <dependency>
                 <groupId>com.ibm.icu</groupId>
                 <artifactId>icu4j</artifactId>
-                <version>71.1</version>
+                <version>72.1</version>
             </dependency>
             <dependency>
                 <groupId>com.jayway.jsonpath</groupId>
@@ -2260,7 +2260,7 @@
             <dependency>
                 <groupId>com.unboundid</groupId>
                 <artifactId>unboundid-ldapsdk</artifactId>
-                <version>6.0.6</version>
+                <version>6.0.7</version>
             </dependency>
             <dependency>
                 <groupId>commons-beanutils</groupId>
@@ -2275,7 +2275,7 @@
             <dependency>
                 <groupId>commons-daemon</groupId>
                 <artifactId>commons-daemon</artifactId>
-                <version>1.3.2</version>
+                <version>1.3.3</version>
             </dependency>
             <dependency>
                 <groupId>commons-dbcp</groupId>
@@ -2403,7 +2403,7 @@
             <dependency>
                 <groupId>io.projectreactor</groupId>
                 <artifactId>reactor-bom</artifactId>
-                <version>2020.0.24</version>
+                <version>2022.0.1</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -2413,9 +2413,14 @@
                 <version>0.8.0</version>
             </dependency>
             <dependency>
+                <groupId>io.projectreactor.rabbitmq</groupId>
+                <artifactId>reactor-rabbitmq</artifactId>
+                <version>1.5.5</version>
+            </dependency>
+            <dependency>
                 <groupId>io.rest-assured</groupId>
                 <artifactId>rest-assured</artifactId>
-                <version>5.2.0</version>
+                <version>5.3.0</version>
                 <exclusions>
                     <exclusion>
                         <groupId>commons-logging</groupId>
@@ -2517,7 +2522,7 @@
             <dependency>
                 <groupId>org.apache.commons</groupId>
                 <artifactId>commons-compress</artifactId>
-                <version>1.21</version>
+                <version>1.22</version>
             </dependency>
             <dependency>
                 <groupId>org.apache.commons</groupId>
@@ -2553,12 +2558,12 @@
             <dependency>
                 <groupId>org.apache.httpcomponents</groupId>
                 <artifactId>httpclient</artifactId>
-                <version>4.5.13</version>
+                <version>4.5.14</version>
             </dependency>
             <dependency>
                 <groupId>org.apache.httpcomponents</groupId>
                 <artifactId>httpcore</artifactId>
-                <version>4.4.15</version>
+                <version>4.4.16</version>
             </dependency>
             <dependency>
                 <groupId>org.apache.james</groupId>
@@ -2890,7 +2895,7 @@
             <dependency>
                 <groupId>org.threeten</groupId>
                 <artifactId>threeten-extra</artifactId>
-                <version>1.7.1</version>
+                <version>1.7.2</version>
             </dependency>
             <dependency>
                 <groupId>pl.pragmatists</groupId>
