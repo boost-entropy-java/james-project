@@ -17,20 +17,30 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.mailbox.exception;
+package org.apache.james.jmap.rfc8621.contract.probe
 
-import org.apache.james.core.Username;
+import com.google.inject.AbstractModule
+import com.google.inject.multibindings.Multibinder
+import javax.inject.Inject
+import org.apache.james.core.Username
+import org.apache.james.user.api.DelegationStore
+import org.apache.james.utils.GuiceProbe
+import reactor.core.scala.publisher.{SFlux, SMono}
 
-public class UserDoesNotExistException extends MailboxException {
+class DelegationProbeModule extends AbstractModule {
+  override def configure(): Unit =
+    Multibinder.newSetBinder(binder(), classOf[GuiceProbe])
+      .addBinding()
+      .to(classOf[DelegationProbe])
+}
 
-    private final Username name;
+class DelegationProbe @Inject()(delegationStore: DelegationStore) extends GuiceProbe {
+  def getAuthorizedUsers(baseUser: Username): Seq[Username] =
+    SFlux.fromPublisher(delegationStore.authorizedUsers(baseUser))
+      .collectSeq()
+      .block()
 
-    public UserDoesNotExistException(Username name) {
-        super("User " + name.asString() + " does not exist");
-        this.name = name;
-    }
-
-    public Username getName() {
-        return name;
-    }
+  def addAuthorizedUser(baseUser: Username, delegatedUser: Username) =
+    SMono.fromPublisher(delegationStore.addAuthorizedUser(delegatedUser).forUser(baseUser))
+      .block()
 }

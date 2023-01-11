@@ -21,20 +21,16 @@ package org.apache.james.jmap.rfc8621.memory;
 
 import static org.apache.james.data.UsersRepositoryModuleChooser.Implementation.DEFAULT;
 
-import java.util.concurrent.ThreadLocalRandom;
-
 import org.apache.james.JamesServerBuilder;
 import org.apache.james.JamesServerExtension;
 import org.apache.james.MemoryJamesConfiguration;
 import org.apache.james.MemoryJamesServerMain;
-import org.apache.james.jmap.rfc8621.contract.EmailGetMethodContract;
+import org.apache.james.jmap.rfc8621.contract.DelegateSetContract;
 import org.apache.james.jmap.rfc8621.contract.probe.DelegationProbeModule;
-import org.apache.james.mailbox.inmemory.InMemoryMessageId;
-import org.apache.james.mailbox.model.MessageId;
 import org.apache.james.modules.TestJMAPServerModule;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-public class MemoryEmailGetMethodTest implements EmailGetMethodContract {
+public class MemoryDelegateSetMethodTest implements DelegateSetContract {
     @RegisterExtension
     static JamesServerExtension testExtension = new JamesServerBuilder<MemoryJamesConfiguration>(tmpDir ->
         MemoryJamesConfiguration.builder()
@@ -45,9 +41,4 @@ public class MemoryEmailGetMethodTest implements EmailGetMethodContract {
         .server(configuration -> MemoryJamesServerMain.createServer(configuration)
             .overrideWith(new TestJMAPServerModule(), new DelegationProbeModule()))
         .build();
-
-    @Override
-    public MessageId randomMessageId() {
-        return InMemoryMessageId.of(ThreadLocalRandom.current().nextInt(100000) + 100);
-    }
 }
