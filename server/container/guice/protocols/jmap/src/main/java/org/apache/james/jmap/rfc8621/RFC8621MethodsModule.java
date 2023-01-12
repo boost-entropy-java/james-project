@@ -47,7 +47,9 @@ import org.apache.james.jmap.http.rfc8621.InjectionKeys;
 import org.apache.james.jmap.mail.DefaultNamespaceFactory;
 import org.apache.james.jmap.mail.NamespaceFactory;
 import org.apache.james.jmap.method.CoreEchoMethod;
+import org.apache.james.jmap.method.DelegateGetMethod;
 import org.apache.james.jmap.method.DelegateSetMethod;
+import org.apache.james.jmap.method.DelegatedAccountGetMethod;
 import org.apache.james.jmap.method.EmailChangesMethod;
 import org.apache.james.jmap.method.EmailGetMethod;
 import org.apache.james.jmap.method.EmailImportMethod;
@@ -153,6 +155,8 @@ public class RFC8621MethodsModule extends AbstractModule {
         methods.addBinding().to(ThreadGetMethod.class);
         methods.addBinding().to(VacationResponseGetMethod.class);
         methods.addBinding().to(VacationResponseSetMethod.class);
+        methods.addBinding().to(DelegatedAccountGetMethod.class);
+        methods.addBinding().to(DelegateGetMethod.class);
         methods.addBinding().to(DelegateSetMethod.class);
 
         Multibinder<JMAPRoutes> routes = Multibinder.newSetBinder(binder(), JMAPRoutes.class);

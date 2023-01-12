@@ -17,24 +17,28 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.modules.protocols;
+package org.apache.james.jmap.rfc8621.memory;
 
-import org.apache.james.jspf.impl.DNSServiceXBillImpl;
+import static org.apache.james.data.UsersRepositoryModuleChooser.Implementation.DEFAULT;
 
-import com.google.inject.AbstractModule;
-import com.google.inject.Provides;
-import com.google.inject.Singleton;
+import org.apache.james.JamesServerBuilder;
+import org.apache.james.JamesServerExtension;
+import org.apache.james.MemoryJamesConfiguration;
+import org.apache.james.MemoryJamesServerMain;
+import org.apache.james.jmap.rfc8621.contract.DelegatedAccountGetMethodContract;
+import org.apache.james.jmap.rfc8621.contract.probe.DelegationProbeModule;
+import org.apache.james.modules.TestJMAPServerModule;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
-public class JSPFModule extends AbstractModule {
-
-    @Override
-    protected void configure() {
-
-    }
-
-    @Singleton
-    @Provides
-    public DNSServiceXBillImpl provideJSPFDNSService() {
-        return new DNSServiceXBillImpl();
-    }
+public class MemoryDelegatedAccountGetMethodTest implements DelegatedAccountGetMethodContract {
+    @RegisterExtension
+    static JamesServerExtension testExtension = new JamesServerBuilder<MemoryJamesConfiguration>(tmpDir ->
+        MemoryJamesConfiguration.builder()
+            .workingDirectory(tmpDir)
+            .configurationFromClasspath()
+            .usersRepository(DEFAULT)
+            .build())
+        .server(configuration -> MemoryJamesServerMain.createServer(configuration)
+            .overrideWith(new TestJMAPServerModule(), new DelegationProbeModule()))
+        .build();
 }
