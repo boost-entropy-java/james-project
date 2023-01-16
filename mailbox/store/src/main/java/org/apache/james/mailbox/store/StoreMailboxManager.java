@@ -244,33 +244,13 @@ public class StoreMailboxManager implements MailboxManager {
     }
 
     @Override
-    public char getDelimiter() {
-        return sessionProvider.getDelimiter();
+    public AuthorizationStep authenticate(Username givenUserid, String passwd) {
+        return sessionProvider.authenticate(givenUserid, passwd);
     }
 
     @Override
-    public MailboxSession login(Username userid, String passwd) throws MailboxException {
-        return sessionProvider.login(userid, passwd);
-    }
-
-    @Override
-    public MailboxSession login(Username userid) {
-        return sessionProvider.login(userid);
-    }
-
-    @Override
-    public MailboxSession loginAsOtherUser(Username adminUserid, String passwd, Username otherUserId) throws MailboxException {
-        return sessionProvider.loginAsOtherUser(adminUserid, passwd, otherUserId);
-    }
-
-    @Override
-    public MailboxSession loginAsOtherUser(Username thisUserId, Username otherUserId) throws MailboxException {
-        return sessionProvider.loginAsOtherUser(thisUserId, otherUserId);
-    }
-
-    @Override
-    public void logout(MailboxSession session) {
-        sessionProvider.logout(session);
+    public AuthorizationStep authenticate(Username givenUserid) {
+        return sessionProvider.authenticate(givenUserid);
     }
 
     /**
@@ -393,7 +373,7 @@ public class StoreMailboxManager implements MailboxManager {
         // Create parents first
         // If any creation fails then the mailbox will not be created
         // TODO: transaction
-        List<MailboxPath> intermediatePaths = sanitizedMailboxPath.getHierarchyLevels(getDelimiter());
+        List<MailboxPath> intermediatePaths = sanitizedMailboxPath.getHierarchyLevels(mailboxSession.getPathDelimiter());
         boolean isRootPath = intermediatePaths.size() == 1;
 
         return Flux.fromIterable(intermediatePaths)
@@ -648,7 +628,7 @@ public class StoreMailboxManager implements MailboxManager {
         // Find submailboxes
         MailboxQuery.UserBound query = MailboxQuery.builder()
             .userAndNamespaceFrom(from)
-            .expression(new PrefixedWildcard(from.getName() + getDelimiter()))
+            .expression(new PrefixedWildcard(from.getName() + session.getPathDelimiter()))
             .build()
             .asUserBound();
 
@@ -854,7 +834,7 @@ public class StoreMailboxManager implements MailboxManager {
     private MailboxMetaData toMailboxMetadata(MailboxSession session, Map<MailboxPath, Boolean> parentMap, Mailbox mailbox, MailboxCounters counters) throws UnsupportedRightException {
         return new MailboxMetaData(
             mailbox,
-            getDelimiter(),
+            session.getPathDelimiter(),
             computeChildren(parentMap, mailbox),
             Selectability.NONE,
             storeRightManager.getResolvedMailboxACL(mailbox, session),

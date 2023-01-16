@@ -49,61 +49,59 @@ public class SessionProviderImpl implements SessionProvider {
     }
 
     @Override
-    public char getDelimiter() {
-        return MailboxConstants.DEFAULT_DELIMITER;
-    }
-
-    @Override
     public MailboxSession createSystemSession(Username userName) {
         return createSession(userName, Optional.empty(), MailboxSession.SessionType.System);
     }
 
     @Override
-    public MailboxSession login(Username userName) {
-        return createSession(userName, Optional.of(userName), MailboxSession.SessionType.System);
+    public AuthorizationStep authenticate(Username thisUserId, String passwd) {
+        return new AuthorizationStep() {
+            @Override
+            public MailboxSession as(Username otherUserId) throws MailboxException {
+                if (!isValidLogin(thisUserId, passwd)) {
+                    throw new BadCredentialsException();
+                }
+                return authenticate(thisUserId).as(otherUserId);
+            }
+
+            @Override
+            public MailboxSession withoutDelegation() throws MailboxException {
+                if (isValidLogin(thisUserId, passwd)) {
+                    return createSession(thisUserId, Optional.ofNullable(thisUserId), MailboxSession.SessionType.User);
+                } else {
+                    throw new BadCredentialsException();
+                }
+            }
+        };
     }
 
     @Override
-    public MailboxSession login(Username userid, String passwd) throws MailboxException {
-        if (isValidLogin(userid, passwd)) {
-            return createSession(userid, Optional.ofNullable(userid), MailboxSession.SessionType.User);
-        } else {
-            throw new BadCredentialsException();
-        }
-    }
+    public AuthorizationStep authenticate(Username givenUserid) {
+        return new AuthorizationStep() {
+            @Override
+            public MailboxSession as(Username otherUserId) throws MailboxException {
+                Authorizator.AuthorizationState authorizationState = authorizator.user(givenUserid).canLoginAs(otherUserId);
+                switch (authorizationState) {
+                    case ALLOWED:
+                        return createSession(otherUserId, Optional.of(givenUserid), MailboxSession.SessionType.System);
+                    case FORBIDDEN:
+                        throw new ForbiddenDelegationException(givenUserid, otherUserId);
+                    case UNKNOWN_USER:
+                        throw new UserDoesNotExistException(otherUserId);
+                    default:
+                        throw new RuntimeException("Unknown AuthorizationState " + authorizationState);
+                }
+            }
 
-    @Override
-    public MailboxSession loginAsOtherUser(Username thisUserId, String passwd, Username otherUserId) throws MailboxException {
-        if (!isValidLogin(thisUserId, passwd)) {
-            throw new BadCredentialsException();
-        }
-        return loginAsOtherUser(thisUserId, otherUserId);
-    }
-
-    @Override
-    public MailboxSession loginAsOtherUser(Username givenUserid, Username otherUserId) throws MailboxException {
-        Authorizator.AuthorizationState authorizationState = authorizator.user(givenUserid).canLoginAs(otherUserId);
-        switch (authorizationState) {
-            case ALLOWED:
-                return createSession(otherUserId, Optional.of(givenUserid), MailboxSession.SessionType.System);
-            case FORBIDDEN:
-                throw new ForbiddenDelegationException(givenUserid, otherUserId);
-            case UNKNOWN_USER:
-                throw new UserDoesNotExistException(otherUserId);
-            default:
-                throw new RuntimeException("Unknown AuthorizationState " + authorizationState);
-        }
-    }
-
-    @Override
-    public void logout(MailboxSession session) {
-        if (session != null) {
-            session.close();
-        }
+            @Override
+            public MailboxSession withoutDelegation() {
+                return createSession(givenUserid, Optional.of(givenUserid), MailboxSession.SessionType.System);
+            }
+        };
     }
 
     private MailboxSession createSession(Username userName, Optional<Username> loggedInUser, MailboxSession.SessionType type) {
-        return new MailboxSession(newSessionId(), userName, loggedInUser, new ArrayList<>(), getDelimiter(), type);
+        return new MailboxSession(newSessionId(), userName, loggedInUser, new ArrayList<>(), MailboxConstants.DEFAULT_DELIMITER, type);
     }
 
     private MailboxSession.SessionId newSessionId() {
