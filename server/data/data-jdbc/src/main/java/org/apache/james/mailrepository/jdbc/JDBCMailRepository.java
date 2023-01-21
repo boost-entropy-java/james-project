@@ -376,7 +376,11 @@ public class JDBCMailRepository implements MailRepository, Configurable, Initial
             insertMessage.setString(1, mc.getName());
             insertMessage.setString(2, repositoryName);
             insertMessage.setString(3, mc.getState());
-            insertMessage.setString(4, mc.getErrorMessage());
+            if (mc.getErrorMessage() != null && mc.getErrorMessage().length() > 200) {
+                insertMessage.setString(4, mc.getErrorMessage().substring(0, 199));
+            } else {
+                insertMessage.setString(4, mc.getErrorMessage());
+            }
             if (mc.getMaybeSender().isNullSender()) {
                 insertMessage.setNull(5, Types.VARCHAR);
             } else {
@@ -389,7 +393,7 @@ public class JDBCMailRepository implements MailRepository, Configurable, Initial
             insertMessage.setString(7, mc.getRemoteHost());
             insertMessage.setString(8, mc.getRemoteAddr());
             if (mc.getPerRecipientSpecificHeaders().getHeadersByRecipient().isEmpty()) {
-                insertMessage.setObject(9, null);
+                insertMessage.setBinaryStream(9, null);
             } else {
                 byte[] bytes = SerializationUtils.serialize(mc.getPerRecipientSpecificHeaders());
                 insertMessage.setBinaryStream(9, new ByteArrayInputStream(bytes), bytes.length);
@@ -460,7 +464,11 @@ public class JDBCMailRepository implements MailRepository, Configurable, Initial
         // Update the existing record
         try (PreparedStatement updateMessage = conn.prepareStatement(sqlQueries.getSqlString("updateMessageSQL", true))) {
             updateMessage.setString(1, mc.getState());
-            updateMessage.setString(2, mc.getErrorMessage());
+            if (mc.getErrorMessage() != null && mc.getErrorMessage().length() > 200) {
+                updateMessage.setString(2, mc.getErrorMessage().substring(0, 199));
+            } else {
+                updateMessage.setString(2, mc.getErrorMessage());
+            }
             if (mc.getMaybeSender().isNullSender()) {
                 updateMessage.setNull(3, Types.VARCHAR);
             } else {
