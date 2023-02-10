@@ -20,12 +20,13 @@
 package org.apache.james.queue.pulsar
 
 import akka.actor.ActorSystem
-import org.apache.james.backends.pulsar.PulsarConfiguration
+import org.apache.james.backends.pulsar.{Auth, PulsarClients, PulsarConfiguration}
 import org.apache.james.blob.api.{BlobId, Store}
 import org.apache.james.blob.mail.MimeMessagePartsId
 import org.apache.james.metrics.api.{GaugeRegistry, MetricFactory}
 import org.apache.james.queue.api.{MailQueueFactory, MailQueueItemDecoratorFactory, MailQueueName}
 import org.apache.pulsar.client.admin.PulsarAdmin
+import org.apache.pulsar.client.impl.auth.{AuthenticationBasic, AuthenticationToken}
 
 import java.util
 import java.util.Optional
@@ -38,6 +39,7 @@ import scala.jdk.OptionConverters._
 import scala.util.Try
 
 class PulsarMailQueueFactory @Inject()(pulsarConfiguration: PulsarConfiguration,
+  pulsarClients:PulsarClients,
   blobIdFactory: BlobId.Factory,
   mimeMessageStore: Store[MimeMessage, MimeMessagePartsId],
   mailQueueItemDecoratorFactory: MailQueueItemDecoratorFactory,
@@ -45,9 +47,7 @@ class PulsarMailQueueFactory @Inject()(pulsarConfiguration: PulsarConfiguration,
   gaugeRegistry: GaugeRegistry
 ) extends MailQueueFactory[PulsarMailQueue] {
   private val queues: AtomicReference[Map[MailQueueName, PulsarMailQueue]] = new AtomicReference(Map.empty)
-  private val admin =
-    PulsarAdmin.builder().serviceHttpUrl(pulsarConfiguration.adminUri).build()
-
+  private val admin = pulsarClients.adminClient
   private val system: ActorSystem = ActorSystem("pulsar-mailqueue")
 
   @PreDestroy
@@ -70,6 +70,7 @@ class PulsarMailQueueFactory @Inject()(pulsarConfiguration: PulsarConfiguration,
       val queue = map.get(name)
         .fold(new PulsarMailQueue(
           PulsarMailQueueConfiguration(name, pulsarConfiguration),
+          pulsarClients,
           blobIdFactory,
           mimeMessageStore,
           mailQueueItemDecoratorFactory,
