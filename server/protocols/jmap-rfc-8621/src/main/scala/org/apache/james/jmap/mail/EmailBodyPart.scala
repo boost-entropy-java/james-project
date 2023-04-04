@@ -35,9 +35,10 @@ import org.apache.james.jmap.core.Properties
 import org.apache.james.jmap.mail.EmailBodyPart.{FILENAME_PREFIX, MULTIPART_ALTERNATIVE, TEXT_HTML, TEXT_PLAIN}
 import org.apache.james.jmap.mail.PartId.PartIdValue
 import org.apache.james.mailbox.model.{Cid, MessageAttachmentMetadata, MessageId, MessageResult}
+import org.apache.james.mime4j.Charsets.DEFAULT_CHARSET
 import org.apache.james.mime4j.codec.{DecodeMonitor, DecoderUtil}
 import org.apache.james.mime4j.dom.field.{ContentDispositionField, ContentLanguageField, ContentTypeField, FieldName}
-import org.apache.james.mime4j.dom.{Entity, Message, Multipart, TextBody => Mime4JTextBody}
+import org.apache.james.mime4j.dom.{Entity, Message, Multipart, SingleBody, TextBody => Mime4JTextBody}
 import org.apache.james.mime4j.message.{DefaultMessageBuilder, DefaultMessageWriter}
 import org.apache.james.mime4j.stream.{Field, MimeConfig, RawField}
 import org.apache.james.util.html.HtmlTextExtractor
@@ -175,14 +176,19 @@ object EmailBodyPart {
     .headOption
     .map(_.getBody)
 
-  private def size(entity: Entity): Try[Size] = {
-    val countingOutputStream: CountingOutputStream = new CountingOutputStream(OutputStream.nullOutputStream())
-    val writer = new DefaultMessageWriter
-    writer.writeBody(entity.getBody, countingOutputStream)
-    refineV[NonNegative](countingOutputStream.getCount) match {
-      case scala.Right(size) => Success(size)
-      case Left(e) => Failure(new IllegalArgumentException(e))
+  private def size(entity: Entity): Try[Size] =
+    entity.getBody match {
+      case body: SingleBody => refineSize(body.size())
+      case body =>
+        val countingOutputStream: CountingOutputStream = new CountingOutputStream(OutputStream.nullOutputStream())
+        val writer = new DefaultMessageWriter
+        writer.writeBody(body, countingOutputStream)
+        refineSize(countingOutputStream.getCount)
     }
+
+  private def refineSize(l: Long): Try[Size] = refineV[NonNegative](l) match {
+    case scala.Right(size) => Success(size)
+    case Left(e) => Failure(new IllegalArgumentException(e))
   }
 
   private def zip[A, B](a: Try[A], b: Try[B]): Try[(A, B)] = for {
@@ -270,7 +276,7 @@ case class EmailBodyPart(partId: PartId,
   def bodyContent: Try[Option[EmailBodyValue]] = entity.getBody match {
     case textBody: Mime4JTextBody =>
       for {
-        value <- Try(IOUtils.toString(textBody.getInputStream, charset(Option(textBody.getMimeCharset))))
+        value <- Try(IOUtils.toString(textBody.getInputStream, Option(textBody.getCharset).getOrElse(DEFAULT_CHARSET)))
       } yield {
         Some(EmailBodyValue(value = value,
           isEncodingProblem = IsEncodingProblem(false),
@@ -286,10 +292,6 @@ case class EmailBodyPart(partId: PartId,
         content.isTruncated)))
     case _ => bodyContent
   }
-
-  private def charset(charset: Option[String]): java.nio.charset.Charset = charset
-    .map(java.nio.charset.Charset.forName)
-    .getOrElse(org.apache.james.mime4j.Charsets.DEFAULT_CHARSET)
 
   def textBody: List[EmailBodyPart] = selfBody ++ textBodyOfMultipart
 
