@@ -25,12 +25,11 @@ import javax.mail.MessagingException;
 
 import org.apache.james.core.MailAddress;
 import org.apache.james.core.Username;
-import org.apache.james.transport.mailets.delivery.MailStore;
 import org.apache.james.transport.mailets.jsieve.Poster;
 import org.apache.james.user.api.UsersRepository;
 import org.apache.james.user.api.UsersRepositoryException;
-import org.apache.mailet.Attribute;
 import org.apache.mailet.Mail;
+import org.apache.mailet.StorageDirective;
 
 public class SievePoster implements Poster {
     private final String folder;
@@ -51,7 +50,11 @@ public class SievePoster implements Poster {
             if (scheme.equals("mailbox")) {
                 UserAndPath userAndPath = retrieveUserAndPath(url, endOfScheme);
 
-                mail.setAttribute(Attribute.convertToAttribute(MailStore.DELIVERY_PATH_PREFIX + userAndPath.user, userAndPath.path));
+                StorageDirective.builder()
+                    .targetFolder(userAndPath.path)
+                    .build()
+                    .encodeAsAttributes(Username.of(userAndPath.user))
+                    .forEach(mail::setAttribute);
             } else {
                 throw new MessagingException("Unsupported protocol");
             }

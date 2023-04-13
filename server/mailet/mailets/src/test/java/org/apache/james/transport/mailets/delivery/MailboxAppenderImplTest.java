@@ -23,7 +23,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Duration;
+import java.util.Optional;
 
+import javax.mail.Flags;
 import javax.mail.MessagingException;
 import javax.mail.internet.MimeMessage;
 
@@ -37,6 +39,7 @@ import org.apache.james.mailbox.model.MailboxPath;
 import org.apache.james.mailbox.model.MessageRange;
 import org.apache.james.mailbox.model.MessageResultIterator;
 import org.apache.james.util.concurrency.ConcurrentTestRunner;
+import org.apache.mailet.StorageDirective;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
@@ -47,7 +50,11 @@ class MailboxAppenderImplTest {
 
     public static final Username USER = Username.of("user");
     public static final String FOLDER = "folder";
+    public static final StorageDirective STORAGE_DIRECTIVE = StorageDirective.builder()
+        .targetFolder(FOLDER)
+        .build();
     public static final String EMPTY_FOLDER = "";
+    private static final Optional<Flags> NO_FLAGS = Optional.empty();
 
     private MailboxAppenderImpl testee;
     private MailboxManager mailboxManager;
@@ -70,7 +77,7 @@ class MailboxAppenderImplTest {
 
     @Test
     void appendShouldAddMessageToDesiredMailbox() throws Exception {
-        Mono.from(testee.append(mimeMessage, USER, FOLDER)).block();
+        Mono.from(testee.append(mimeMessage, USER, STORAGE_DIRECTIVE)).block();
 
         MessageResultIterator messages = mailboxManager.getMailbox(MailboxPath.forUser(USER, FOLDER), session)
             .getMessages(MessageRange.all(), FetchGroup.FULL_CONTENT, session);
@@ -84,7 +91,7 @@ class MailboxAppenderImplTest {
         MailboxPath mailboxPath = MailboxPath.forUser(USER, FOLDER);
         mailboxManager.createMailbox(mailboxPath, session);
 
-        Mono.from(testee.append(mimeMessage, USER, FOLDER)).block();
+        Mono.from(testee.append(mimeMessage, USER, STORAGE_DIRECTIVE)).block();
 
         MessageResultIterator messages = mailboxManager.getMailbox(mailboxPath, session)
             .getMessages(MessageRange.all(), FetchGroup.FULL_CONTENT, session);
@@ -95,13 +102,17 @@ class MailboxAppenderImplTest {
 
     @Test
     void appendShouldNotAppendToEmptyFolder() {
-        assertThatThrownBy(() -> Mono.from(testee.append(mimeMessage, USER, EMPTY_FOLDER)).block())
+        assertThatThrownBy(() -> Mono.from(testee.append(mimeMessage, USER, StorageDirective.builder()
+            .targetFolder(EMPTY_FOLDER)
+            .build())).block())
             .isInstanceOf(MessagingException.class);
     }
 
     @Test
     void appendShouldRemovePathSeparatorAsFirstChar() throws Exception {
-        Mono.from(testee.append(mimeMessage, USER, "." + FOLDER)).block();
+        Mono.from(testee.append(mimeMessage, USER, StorageDirective.builder()
+            .targetFolder("." + FOLDER)
+            .build())).block();
 
         MessageResultIterator messages = mailboxManager.getMailbox(MailboxPath.forUser(USER, FOLDER), session)
             .getMessages(MessageRange.all(), FetchGroup.FULL_CONTENT, session);
@@ -111,8 +122,23 @@ class MailboxAppenderImplTest {
     }
 
     @Test
+    void appendShouldSupportFlags() throws Exception {
+        Mono.from(testee.append(mimeMessage, USER, StorageDirective.builder()
+            .targetFolder("." + FOLDER)
+            .seen(Optional.of(true))
+            .build())).block();
+
+        MessageResultIterator messages = mailboxManager.getMailbox(MailboxPath.forUser(USER, FOLDER), session)
+            .getMessages(MessageRange.all(), FetchGroup.FULL_CONTENT, session);
+
+        assertThat(messages.next().getFlags().contains(Flags.Flag.SEEN)).isTrue();
+    }
+
+    @Test
     void appendShouldReplaceSlashBySeparator() throws Exception {
-        Mono.from(testee.append(mimeMessage, USER, FOLDER + "/any")).block();
+        Mono.from(testee.append(mimeMessage, USER, StorageDirective.builder()
+            .targetFolder(FOLDER + "/any")
+            .build())).block();
 
         MessageResultIterator messages = mailboxManager.getMailbox(MailboxPath.forUser(USER, FOLDER + ".any"), session)
             .getMessages(MessageRange.all(), FetchGroup.FULL_CONTENT, session);
@@ -124,7 +150,9 @@ class MailboxAppenderImplTest {
     @RepeatedTest(20)
     void appendShouldNotFailInConcurrentEnvironment() throws Exception {
         ConcurrentTestRunner.builder()
-            .reactorOperation((a, b) -> Mono.from(testee.append(mimeMessage, USER, FOLDER + "/any")).then())
+            .reactorOperation((a, b) -> Mono.from(testee.append(mimeMessage, USER, StorageDirective.builder()
+                .targetFolder(FOLDER + "/any")
+                .build())).then())
             .threadCount(100)
             .runSuccessfullyWithin(Duration.ofMinutes(1));
     }

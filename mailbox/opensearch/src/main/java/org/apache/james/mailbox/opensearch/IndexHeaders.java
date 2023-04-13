@@ -17,12 +17,8 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.transport.mailets.delivery;
+package org.apache.james.mailbox.opensearch;
 
-import org.apache.james.core.MailAddress;
-import org.apache.mailet.Mail;
-import org.reactivestreams.Publisher;
-
-public interface MailStore {
-    Publisher<Void> storeMail(MailAddress recipient, Mail mail);
+public enum IndexHeaders {
+    NO, YES
 }

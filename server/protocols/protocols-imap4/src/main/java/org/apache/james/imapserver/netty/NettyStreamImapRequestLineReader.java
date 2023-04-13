@@ -24,19 +24,24 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
 
 import org.apache.james.imap.api.display.HumanReadableText;
 import org.apache.james.imap.decode.DecodingException;
 import org.apache.james.imap.message.Literal;
 import org.apache.james.imap.utils.EolInputStream;
+import org.apache.james.util.io.UnsynchronizedBufferedInputStream;
 
+import com.github.fge.lambdas.Throwing;
 import com.google.common.io.ByteStreams;
 import com.google.common.io.CountingInputStream;
 
 import io.netty.channel.Channel;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 public class NettyStreamImapRequestLineReader extends AbstractNettyImapRequestLineReader implements Closeable {
-    private class FileLiteral implements Literal, Closeable {
+    private static class FileLiteral implements Literal, Closeable {
         private final long offset;
         private final int size;
         private final boolean extraCRLF;
@@ -53,7 +58,9 @@ public class NettyStreamImapRequestLineReader extends AbstractNettyImapRequestLi
 
         @Override
         public void close() {
-            file.delete();
+            Mono.fromRunnable(Throwing.runnable(() -> Files.delete(file.toPath())))
+                .subscribeOn(Schedulers.boundedElastic())
+                .subscribe();
         }
 
         @Override
@@ -81,7 +88,7 @@ public class NettyStreamImapRequestLineReader extends AbstractNettyImapRequestLi
         super(channel, retry);
         this.backingFile = file;
         try {
-            this.in = new CountingInputStream(new FileInputStream(file));
+            this.in = new CountingInputStream(new UnsynchronizedBufferedInputStream(new FileInputStream(file)));
         } catch (FileNotFoundException e) {
             throw new RuntimeException(e);
         }
@@ -100,7 +107,6 @@ public class NettyStreamImapRequestLineReader extends AbstractNettyImapRequestLi
      */
     @Override
     public char nextChar() throws DecodingException {
-        
         if (!nextSeen) {
             int next;
             try {
@@ -121,8 +127,7 @@ public class NettyStreamImapRequestLineReader extends AbstractNettyImapRequestLi
 
     /**
      * Reads and consumes a number of characters from the underlying reader,
-     * filling the char array provided. TODO: remove unnecessary copying of
-     * bits; line reader should maintain an internal ByteBuffer;
+     * filling the char array provided.
      * 
      * @param size
      *            number of characters to read and consume
@@ -138,7 +143,6 @@ public class NettyStreamImapRequestLineReader extends AbstractNettyImapRequestLi
         nextSeen = false;
         nextChar = 0;
 
-        //TODO move this copy in netty stack and try to avoid it
         try {
             long offset = in.getCount();
             in.skip(size);

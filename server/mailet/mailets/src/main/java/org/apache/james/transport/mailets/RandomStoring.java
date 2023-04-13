@@ -37,10 +37,9 @@ import org.apache.james.core.Username;
 import org.apache.james.mailbox.MailboxManager;
 import org.apache.james.mailbox.MailboxSession;
 import org.apache.james.mailbox.model.search.MailboxQuery;
-import org.apache.james.transport.mailets.delivery.MailStore;
 import org.apache.james.user.api.UsersRepository;
-import org.apache.mailet.Attribute;
 import org.apache.mailet.Mail;
+import org.apache.mailet.StorageDirective;
 import org.apache.mailet.base.GenericMailet;
 
 import com.github.fge.lambdas.Throwing;
@@ -83,7 +82,11 @@ public class RandomStoring extends GenericMailet {
 
         mail.setRecipients(mailAddresses);
         reroutingInfos.forEach(reroutingInfo ->
-            mail.setAttribute(Attribute.convertToAttribute(MailStore.DELIVERY_PATH_PREFIX + reroutingInfo.getUser().asString(), reroutingInfo.getMailbox())));
+                StorageDirective.builder()
+                    .targetFolder(reroutingInfo.getMailbox())
+                    .build()
+                    .encodeAsAttributes(reroutingInfo.getUser())
+                    .forEach(mail::setAttribute));
     }
 
     @Override

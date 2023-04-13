@@ -26,9 +26,8 @@ import org.apache.james.core.Username;
 import org.apache.james.metrics.api.Metric;
 import org.apache.james.user.api.UsersRepository;
 import org.apache.james.user.api.UsersRepositoryException;
-import org.apache.mailet.AttributeName;
-import org.apache.mailet.AttributeUtils;
 import org.apache.mailet.Mail;
+import org.apache.mailet.StorageDirective;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -94,34 +93,20 @@ public class SimpleMailStore implements MailStore {
     @Override
     public Mono<Void> storeMail(MailAddress recipient, Mail mail) {
         Username username = computeUsername(recipient);
-        String locatedFolder = locateFolder(username, mail);
+        StorageDirective storageDirective = StorageDirective.fromMail(computeUsername(recipient), mail)
+            .withDefaultFolder(folder);
 
         try {
-            return Mono.from(mailboxAppender.append(mail.getMessage(), username, locatedFolder))
+            return Mono.from(mailboxAppender.append(mail.getMessage(), username, storageDirective))
                 .doOnSuccess(ids -> {
                     metric.increment();
                     LOGGER.info("Local delivered mail {} with messageId {} successfully from {} to {} in folder {} with composedMessageId {}",
-                        mail.getName(), getMessageId(mail), mail.getMaybeSender().asString(), recipient.asPrettyString(), locatedFolder, ids);
+                        mail.getName(), getMessageId(mail), mail.getMaybeSender().asString(), recipient.asPrettyString(), storageDirective.getTargetFolder().get(), ids);
                 })
                 .then();
         } catch (MessagingException e) {
             throw new RuntimeException("Could not retrieve mail message content", e);
         }
-    }
-    
-    private String getMessageId(Mail mail) {
-        try {
-            return mail.getMessage().getMessageID();
-        } catch (MessagingException e) {
-            LOGGER.debug("failed to extract messageId from message {}", mail.getName(), e);
-            return null;
-        }
-    }
-
-    private String locateFolder(Username username, Mail mail) {
-        return AttributeUtils
-            .getValueAndCastFromMail(mail, AttributeName.of(DELIVERY_PATH_PREFIX + username.asString()), String.class)
-            .orElse(folder);
     }
 
     private Username computeUsername(MailAddress recipient) {
@@ -130,6 +115,15 @@ public class SimpleMailStore implements MailStore {
         } catch (UsersRepositoryException e) {
             LOGGER.warn("Unable to retrieve username for {}", recipient.asPrettyString(), e);
             return Username.of(recipient.asString());
+        }
+    }
+
+    private String getMessageId(Mail mail) {
+        try {
+            return mail.getMessage().getMessageID();
+        } catch (MessagingException e) {
+            LOGGER.debug("failed to extract messageId from message {}", mail.getName(), e);
+            return null;
         }
     }
 }

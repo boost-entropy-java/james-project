@@ -18,8 +18,11 @@
  ****************************************************************/
 package org.apache.james.transport.mailets;
 
+import java.util.Optional;
+
 import javax.inject.Inject;
 import javax.inject.Named;
+import javax.mail.Flags;
 import javax.mail.MessagingException;
 
 import org.apache.james.core.MailAddress;
@@ -30,6 +33,7 @@ import org.apache.james.user.api.UsersRepository;
 import org.apache.james.user.api.UsersRepositoryException;
 import org.apache.mailet.Experimental;
 import org.apache.mailet.Mail;
+import org.apache.mailet.StorageDirective;
 import org.apache.mailet.base.GenericMailet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,6 +57,7 @@ import org.slf4j.LoggerFactory;
 @Experimental
 public class ToSenderFolder extends GenericMailet {
     private static final Logger LOGGER = LoggerFactory.getLogger(ToSenderFolder.class);
+    private static final Optional<Flags> NO_FLAGS = Optional.empty();
 
     private final UsersRepository usersRepository;
     private final MailboxManager mailboxManager;
@@ -84,7 +89,7 @@ public class ToSenderFolder extends GenericMailet {
             MailAddress sender = mail.getMaybeSender().get();
             Username username = retrieveUser(sender);
 
-            mailboxAppender.append(mail.getMessage(), username, folder).block();
+            mailboxAppender.append(mail.getMessage(), username, StorageDirective.builder().targetFolder(folder).build()).block();
 
             LOGGER.error("Local delivery with ToSenderFolder mailet for mail {} with sender {} in folder {}", mail.getName(), sender, folder);
         }

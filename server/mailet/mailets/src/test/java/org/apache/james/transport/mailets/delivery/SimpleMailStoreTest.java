@@ -76,7 +76,7 @@ class SimpleMailStoreTest {
             .build();
         testee.storeMail(recipient, mail);
 
-        verify(mailboxAppender).append(any(MimeMessage.class), eq(Username.of(recipient.asString())), eq(FOLDER));
+        verify(mailboxAppender).append(any(MimeMessage.class), eq(Username.of(recipient.asString())), any());
     }
 
     @Test
@@ -89,7 +89,7 @@ class SimpleMailStoreTest {
             .build();
         testee.storeMail(recipient, mail);
 
-        verify(mailboxAppender).append(any(MimeMessage.class), eq(Username.of(recipient.getLocalPart())), eq(FOLDER));
+        verify(mailboxAppender).append(any(MimeMessage.class), eq(Username.of(recipient.getLocalPart())), any());
     }
 
     @Test
@@ -102,6 +102,6 @@ class SimpleMailStoreTest {
             .build();
         testee.storeMail(recipient, mail);
 
-        verify(mailboxAppender).append(any(MimeMessage.class), eq(Username.of(recipient.toString())), eq(FOLDER));
+        verify(mailboxAppender).append(any(MimeMessage.class), eq(Username.of(recipient.toString())), any());
     }
 }
