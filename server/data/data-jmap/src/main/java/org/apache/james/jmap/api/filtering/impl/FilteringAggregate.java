@@ -34,6 +34,8 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 
 public class FilteringAggregate {
+    private static final boolean ENABLE_INCREMENTS = Boolean.parseBoolean(System.getProperty("james.jmap.filters.eventsource.increments.enabled", "true"));
+    private static final boolean ENABLE_SNAPSHOTS = Boolean.parseBoolean(System.getProperty("james.jmap.filters.eventsource.snapshots.enabled", "true"));
 
     public static FilteringAggregate load(FilteringAggregateId aggregateId, History eventsOfAggregate) {
         return new FilteringAggregate(aggregateId, eventsOfAggregate);
@@ -70,10 +72,28 @@ public class FilteringAggregate {
     public List<? extends Event> defineRules(DefineRulesCommand storeCommand) {
         Preconditions.checkArgument(shouldNotContainDuplicates(storeCommand.getRules()));
         StateMismatchException.checkState(expectedState(storeCommand.getIfInState()), "Provided state must be as same as the current state");
-        ImmutableList<RuleSetDefined> events = ImmutableList.of(
-            new RuleSetDefined(aggregateId, history.getNextEventId(), ImmutableList.copyOf(storeCommand.getRules())));
+        ImmutableList<Event> events = generateEvents(storeCommand);
         events.forEach(this::apply);
         return events;
+    }
+
+    private ImmutableList<Event> generateEvents(DefineRulesCommand storeCommand) {
+        EventId nextEventId = history.getNextEventId();
+        if (ENABLE_INCREMENTS) {
+            // SNAPSHOT periodically
+            if (ENABLE_SNAPSHOTS && history.getEvents().size() >= 100) {
+                return resetRules(storeCommand, nextEventId);
+            }
+            return IncrementalRuleChange.ofDiff(aggregateId, nextEventId, state.rules, storeCommand.getRules())
+                .map(ImmutableList::<Event>of)
+                .orElseGet(() -> resetRules(storeCommand, nextEventId));
+        } else {
+            return resetRules(storeCommand, nextEventId);
+        }
+    }
+
+    private ImmutableList<Event> resetRules(DefineRulesCommand storeCommand, EventId nextEventId) {
+        return ImmutableList.of(new RuleSetDefined(aggregateId, nextEventId, ImmutableList.copyOf(storeCommand.getRules())));
     }
 
     private boolean shouldNotContainDuplicates(List<Rule> rules) {
@@ -100,6 +120,9 @@ public class FilteringAggregate {
     private void apply(Event event) {
         if (event instanceof RuleSetDefined) {
             state = state.set(((RuleSetDefined)event).getRules());
+        }
+        if (event instanceof IncrementalRuleChange) {
+            state = state.set(((IncrementalRuleChange)event).apply(state.rules));
         }
     }
 }

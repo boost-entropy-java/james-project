@@ -25,14 +25,13 @@ final case class TestEventDTO @JsonCreator() ( @JsonProperty("type") `type`: Str
                                     @JsonProperty("data") data: String,
                                     @JsonProperty("eventId") eventId: Int,
                                     @JsonProperty("aggregate") aggregate: Int) extends EventDTO {
-  override def getType: String = {
-  `type`
-}
+  override val getType: String = `type`
+
   def getData: String = data
 
   def getEventId: Long = eventId
 
   def getAggregate: Int = aggregate
 
-  @JsonIgnore def toEvent: TestEvent = new TestEvent(EventId.fromSerialized (eventId), TestAggregateId(aggregate), data)
+  @JsonIgnore def toEvent: TestEvent = TestEvent(EventId.fromSerialized(eventId), TestAggregateId(aggregate), data)
 }

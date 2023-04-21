@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance   *
  * with the License.  You may obtain a copy of the License at   *
  *                                                              *
- *   http://www.apache.org/licenses/LICENSE-2.0                 *
+ * http://www.apache.org/licenses/LICENSE-2.0                   *
  *                                                              *
  * Unless required by applicable law or agreed to in writing,   *
  * software distributed under the License is distributed on an  *
@@ -15,20 +15,23 @@
  * KIND, either express or implied.  See the License for the    *
  * specific language governing permissions and limitations      *
  * under the License.                                           *
- ****************************************************************/
+ * ***************************************************************/
+package org.apache.james.eventsourcing.eventstore.cassandra.dto
 
-package org.apache.james.jmap.cassandra.filtering;
+import com.fasterxml.jackson.annotation.{JsonCreator, JsonIgnore, JsonProperty}
+import org.apache.james.eventsourcing.{EventId, TestAggregateId, TestEvent}
 
-import org.apache.james.eventsourcing.eventstore.cassandra.CassandraEventStoreExtension;
-import org.apache.james.eventsourcing.eventstore.cassandra.JsonEventSerializer;
-import org.apache.james.jmap.api.filtering.FilteringManagementContract;
-import org.junit.jupiter.api.extension.RegisterExtension;
+final case class SnapshotEventDTO @JsonCreator()(@JsonProperty("type") `type`: String,
+                                                 @JsonProperty("data") data: String,
+                                                 @JsonProperty("eventId") eventId: Int,
+                                                 @JsonProperty("aggregate") aggregate: Int) extends EventDTO {
+  override def getType: String = `type`
 
-class CassandraEventSourcingFilteringManagementTest implements FilteringManagementContract {
-    @RegisterExtension
-    static CassandraEventStoreExtension eventStoreExtension =
-        new CassandraEventStoreExtension(JsonEventSerializer.forModules(
-                FilteringRuleSetDefineDTOModules.FILTERING_RULE_SET_DEFINED,
-                FilteringRuleSetDefineDTOModules.FILTERING_INCREMENT)
-            .withoutNestedType());
+  def getData: String = data
+
+  def getEventId: Long = eventId
+
+  def getAggregate: Int = aggregate
+
+  @JsonIgnore def toEvent: SnapshotEvent = SnapshotEvent(EventId.fromSerialized(eventId), TestAggregateId(aggregate), data)
 }
