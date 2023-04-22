@@ -19,10 +19,20 @@
 
 package org.apache.james.webadmin.data.jmap;
 
-import org.apache.james.webadmin.tasks.TaskRegistrationKey;
+import static org.apache.james.webadmin.data.jmap.Constants.POPULATE_FILTERING_PROJECTION;
 
-public interface Constants {
-    TaskRegistrationKey TASK_REGISTRATION_KEY = TaskRegistrationKey.of("recomputeFastViewProjectionItems");
-    TaskRegistrationKey POPULATE_EMAIL_QUERY_VIEW = TaskRegistrationKey.of("populateEmailQueryView");
-    TaskRegistrationKey POPULATE_FILTERING_PROJECTION = TaskRegistrationKey.of("populateFilteringProjection");
+import javax.inject.Inject;
+
+import org.apache.james.jmap.api.filtering.impl.EventSourcingFilteringManagement;
+import org.apache.james.user.api.UsersRepository;
+import org.apache.james.webadmin.tasks.TaskFromRequestRegistry;
+
+public class PopulateFilteringProjectionRequestToTask extends TaskFromRequestRegistry.TaskRegistration {
+    @Inject
+    PopulateFilteringProjectionRequestToTask(EventSourcingFilteringManagement.NoReadProjection noReadProjection,
+                                             EventSourcingFilteringManagement.ReadProjection readProjection,
+                                             UsersRepository usersRepository) {
+        super(POPULATE_FILTERING_PROJECTION,
+            request -> new PopulateFilteringProjectionTask(noReadProjection, readProjection, usersRepository));
+    }
 }

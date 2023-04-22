@@ -17,12 +17,25 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.webadmin.data.jmap;
+package org.apache.james.jmap.cassandra.filtering;
 
-import org.apache.james.webadmin.tasks.TaskRegistrationKey;
+import static com.datastax.oss.driver.api.core.type.DataTypes.INT;
+import static com.datastax.oss.driver.api.core.type.DataTypes.TEXT;
 
-public interface Constants {
-    TaskRegistrationKey TASK_REGISTRATION_KEY = TaskRegistrationKey.of("recomputeFastViewProjectionItems");
-    TaskRegistrationKey POPULATE_EMAIL_QUERY_VIEW = TaskRegistrationKey.of("populateEmailQueryView");
-    TaskRegistrationKey POPULATE_FILTERING_PROJECTION = TaskRegistrationKey.of("populateFilteringProjection");
+import org.apache.james.backends.cassandra.components.CassandraModule;
+
+public interface CassandraFilteringProjectionModule {
+    String TABLE_NAME = "filters_projection";
+
+    String AGGREGATE_ID = "aggregate_id";
+    String EVENT_ID = "event_id";
+    String RULES = "rules";
+
+    CassandraModule MODULE = CassandraModule.table(TABLE_NAME)
+        .comment("Holds read projection for the event sourcing system managing JMAP filters.")
+        .statement(statement -> types -> statement
+            .withPartitionKey(AGGREGATE_ID, TEXT)
+            .withColumn(EVENT_ID, INT)
+            .withColumn(RULES, TEXT))
+        .build();
 }

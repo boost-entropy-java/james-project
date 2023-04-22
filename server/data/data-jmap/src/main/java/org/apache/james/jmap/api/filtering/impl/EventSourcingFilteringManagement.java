@@ -19,13 +19,17 @@
 
 package org.apache.james.jmap.api.filtering.impl;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Function;
 
 import javax.inject.Inject;
 
 import org.apache.james.core.Username;
+import org.apache.james.eventsourcing.Event;
 import org.apache.james.eventsourcing.EventSourcingSystem;
+import org.apache.james.eventsourcing.ReactiveSubscriber;
 import org.apache.james.eventsourcing.Subscriber;
 import org.apache.james.eventsourcing.eventstore.EventStore;
 import org.apache.james.eventsourcing.eventstore.History;
@@ -42,51 +46,86 @@ import com.google.common.collect.ImmutableSet;
 import reactor.core.publisher.Mono;
 
 public class EventSourcingFilteringManagement implements FilteringManagement {
+    public interface ReadProjection {
+        Publisher<Rules> listRulesForUser(Username username);
+
+        Publisher<Version> getLatestVersion(Username username);
+
+        Optional<ReactiveSubscriber> subscriber(Function<Username, Publisher<Rules>> ruleLoader);
+    }
+
+    public static class NoReadProjection implements ReadProjection {
+        private final EventStore eventStore;
+
+        @Inject
+        public NoReadProjection(EventStore eventStore) {
+            this.eventStore = eventStore;
+        }
+
+        @Override
+        public Publisher<Rules> listRulesForUser(Username username) {
+            Preconditions.checkNotNull(username);
+
+            FilteringAggregateId aggregateId = new FilteringAggregateId(username);
+
+            return Mono.from(eventStore.getEventsOfAggregate(aggregateId))
+                .map(history -> FilteringAggregate.load(aggregateId, history).listRules())
+                .defaultIfEmpty(new Rules(ImmutableList.of(), Version.INITIAL));
+        }
+
+        @Override
+        public Publisher<Version> getLatestVersion(Username username) {
+            Preconditions.checkNotNull(username);
+
+            FilteringAggregateId aggregateId = new FilteringAggregateId(username);
+
+            return Mono.from(eventStore.getEventsOfAggregate(aggregateId))
+                .map(History::getVersionAsJava)
+                .map(eventIdOptional -> eventIdOptional.map(eventId -> new Version(eventId.value()))
+                    .orElse(Version.INITIAL));
+        }
+
+        @Override
+        public Optional<ReactiveSubscriber> subscriber(Function<Username, Publisher<Rules>> ruleLoader) {
+            return Optional.empty();
+        }
+    }
 
     private static final ImmutableSet<Subscriber> NO_SUBSCRIBER = ImmutableSet.of();
 
-    private final EventStore eventStore;
+    private final ReadProjection readProjection;
     private final EventSourcingSystem eventSourcingSystem;
 
     @Inject
     public EventSourcingFilteringManagement(EventStore eventStore) {
+        this(eventStore, new NoReadProjection(eventStore));
+    }
+
+    public EventSourcingFilteringManagement(EventStore eventStore, ReadProjection readProjection) {
+        this.readProjection = new NoReadProjection(eventStore);
         this.eventSourcingSystem = EventSourcingSystem.fromJava(
             ImmutableSet.of(new DefineRulesCommandHandler(eventStore)),
-            NO_SUBSCRIBER,
+            readProjection.subscriber(aggregateId -> new NoReadProjection(eventStore).listRulesForUser(aggregateId))
+                .map(Subscriber.class::cast).map(ImmutableSet::of).orElse(NO_SUBSCRIBER),
             eventStore);
-        this.eventStore = eventStore;
     }
 
     @Override
     public Publisher<Version> defineRulesForUser(Username username, List<Rule> rules, Optional<Version> ifInState) {
         return Mono.from(eventSourcingSystem.dispatch(new DefineRulesCommand(username, rules, ifInState)))
-            .then(Mono.from(eventStore.getEventsOfAggregate(new FilteringAggregateId(username)))
-                .map(History::getVersionAsJava)
-                .map(eventIdOptional -> eventIdOptional.map(eventId -> new Version(eventId.value()))
-                    .orElse(Version.INITIAL)));
+            .map(events -> Version.from(events.stream()
+                .map(Event::eventId)
+                .sorted(Comparator.reverseOrder())
+                .findFirst()));
     }
 
     @Override
     public Publisher<Rules> listRulesForUser(Username username) {
-        Preconditions.checkNotNull(username);
-
-        FilteringAggregateId aggregateId = new FilteringAggregateId(username);
-
-        return Mono.from(eventStore.getEventsOfAggregate(aggregateId))
-            .map(history -> FilteringAggregate.load(aggregateId, history).listRules())
-            .defaultIfEmpty(new Rules(ImmutableList.of(), Version.INITIAL));
+        return readProjection.listRulesForUser(username);
     }
 
     @Override
     public Publisher<Version> getLatestVersion(Username username) {
-        Preconditions.checkNotNull(username);
-
-        FilteringAggregateId aggregateId = new FilteringAggregateId(username);
-
-        return Mono.from(eventStore.getEventsOfAggregate(aggregateId))
-            .map(History::getVersionAsJava)
-            .map(eventIdOptional -> eventIdOptional.map(eventId -> new Version(eventId.value()))
-                .orElse(Version.INITIAL));
+        return readProjection.getLatestVersion(username);
     }
-
 }

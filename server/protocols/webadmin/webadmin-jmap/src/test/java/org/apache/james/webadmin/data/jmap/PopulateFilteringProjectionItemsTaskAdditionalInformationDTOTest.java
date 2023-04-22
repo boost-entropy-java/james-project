@@ -19,10 +19,24 @@
 
 package org.apache.james.webadmin.data.jmap;
 
-import org.apache.james.webadmin.tasks.TaskRegistrationKey;
+import java.time.Instant;
 
-public interface Constants {
-    TaskRegistrationKey TASK_REGISTRATION_KEY = TaskRegistrationKey.of("recomputeFastViewProjectionItems");
-    TaskRegistrationKey POPULATE_EMAIL_QUERY_VIEW = TaskRegistrationKey.of("populateEmailQueryView");
-    TaskRegistrationKey POPULATE_FILTERING_PROJECTION = TaskRegistrationKey.of("populateFilteringProjection");
+import org.apache.james.JsonSerializationVerifier;
+import org.apache.james.util.ClassLoaderUtils;
+import org.junit.jupiter.api.Test;
+
+class PopulateFilteringProjectionItemsTaskAdditionalInformationDTOTest {
+    private static final Instant INSTANT = Instant.parse("2007-12-03T10:15:30.00Z");
+    private static final PopulateFilteringProjectionTask.AdditionalInformation DOMAIN_OBJECT = new PopulateFilteringProjectionTask.AdditionalInformation(
+        1,
+        2,
+        INSTANT);
+
+    @Test
+    void shouldMatchJsonSerializationContract() throws Exception {
+        JsonSerializationVerifier.dtoModule(PopulateFilteringProjectionTaskAdditionalInformationDTO.module())
+            .bean(DOMAIN_OBJECT)
+            .json(ClassLoaderUtils.getSystemResourceAsString("json/populateFilters.additionalInformation.json"))
+            .verify();
+    }
 }

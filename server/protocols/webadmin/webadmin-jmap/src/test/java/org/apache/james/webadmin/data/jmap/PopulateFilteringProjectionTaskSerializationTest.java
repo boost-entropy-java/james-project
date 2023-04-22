@@ -17,26 +17,35 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.jmap.api.filtering.impl;
+package org.apache.james.webadmin.data.jmap;
 
+import static org.mockito.Mockito.mock;
+
+import org.apache.james.JsonSerializationVerifier;
 import org.apache.james.eventsourcing.eventstore.EventStore;
-import org.apache.james.eventsourcing.eventstore.memory.InMemoryEventStore;
-import org.apache.james.eventsourcing.eventstore.memory.InMemoryEventStoreExtension;
-import org.apache.james.jmap.api.filtering.FilteringManagement;
-import org.apache.james.jmap.api.filtering.FilteringManagementContract;
+import org.apache.james.jmap.api.filtering.impl.EventSourcingFilteringManagement;
+import org.apache.james.user.api.UsersRepository;
+import org.apache.james.util.ClassLoaderUtils;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.Test;
 
-public class InMemoryEventSourcingFilteringManagementTest implements FilteringManagementContract {
-    private EventStore eventStore;
+class PopulateFilteringProjectionTaskSerializationTest {
+    private EventSourcingFilteringManagement.NoReadProjection noReadProjection;
+    private EventSourcingFilteringManagement.ReadProjection readProjection;
+    private UsersRepository usersRepository;
 
     @BeforeEach
     void setUp() {
-        eventStore = new InMemoryEventStore();
+        noReadProjection = new EventSourcingFilteringManagement.NoReadProjection(mock(EventStore.class));
+        readProjection = mock(EventSourcingFilteringManagement.ReadProjection.class);
+        usersRepository = mock(UsersRepository.class);
     }
 
-    @Override
-    public FilteringManagement instantiateFilteringManagement() {
-        return new EventSourcingFilteringManagement(eventStore);
+    @Test
+    void shouldMatchJsonSerializationContract() throws Exception {
+        JsonSerializationVerifier.dtoModule(PopulateFilteringProjectionTask.module(noReadProjection, readProjection, usersRepository))
+            .bean(new PopulateFilteringProjectionTask(noReadProjection, readProjection, usersRepository))
+            .json(ClassLoaderUtils.getSystemResourceAsString("json/populateFilters.task.json"))
+            .verify();
     }
 }
