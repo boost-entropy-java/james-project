@@ -19,91 +19,89 @@
 
 package org.apache.james.transport.mailets
 
-import java.time.Duration
-import java.time.temporal.ChronoUnit
-
 import eu.timepit.refined.auto._
 import org.apache.james.rate.limiter.api.Increment.Increment
 import org.apache.james.rate.limiter.api.{AllowedQuantity, Increment, Rule, Rules}
+import org.apache.james.transport.mailets.ConfigurationOps.{OptionOps, SizeOps}
 import org.apache.james.util.DurationParser
 import org.apache.mailet.{Mail, MailetConfig}
 
+import java.time.Duration
+import java.time.temporal.ChronoUnit
 import scala.util.Try
 
 case class KeyPrefix(value: String)
 
-object DurationParsingUtil {
-  def parseDuration(mailetConfig: MailetConfig): Duration = Option(mailetConfig.getInitParameter("duration"))
-    .map(string => DurationParser.parse(string, ChronoUnit.SECONDS))
-    .getOrElse(throw new IllegalArgumentException("'duration' is compulsory"))
+object ConfigurationOps {
+
+  implicit class OptionOps(mailetConfig: MailetConfig) {
+    def getOptionalString(key: String): Option[String] = Option(mailetConfig.getInitParameter(key))
+
+    def getOptionalLong(key: String): Option[Long] = Option(mailetConfig.getInitParameter(key)).map(_.toLong)
+  }
+
+  implicit class DurationOps(mailetConfig: MailetConfig) {
+    def getDuration(key: String): Option[Duration] = mailetConfig.getOptionalString(key)
+      .map(string => DurationParser.parse(string, ChronoUnit.SECONDS))
+  }
+
+  implicit class SizeOps(mailetConfig: MailetConfig) {
+    def getOptionalSize(key: String): Option[org.apache.james.util.Size] = mailetConfig.getOptionalString(key)
+      .map {
+        case "" => throw new IllegalArgumentException(s"'$key' field cannot be empty if specified")
+        case s  => s
+      }
+      .map(org.apache.james.util.Size.parse)
+  }
 }
 
-object PrecisionParsingUtil {
-  def parsePrecision(mailetConfig: MailetConfig): Option[Duration] = Option(mailetConfig.getInitParameter("precision"))
-    .map(string => DurationParser.parse(string, ChronoUnit.SECONDS))
+object EntityType {
+
+  implicit class EitherOps[E <: Throwable, A](either: Either[E, A]) {
+    def orThrow(message: String): A = either.left.map(cause => new IllegalArgumentException(message, cause)).toTry.get
+  }
+
+  def extractRules(entityType: EntityType, duration: Duration, mailetConfig: MailetConfig): Option[Rules] = (entityType match {
+    case Count      => mailetConfig.getOptionalLong("count")
+    case Recipients => mailetConfig.getOptionalLong("recipients")
+    case Size       => mailetConfig.getOptionalSize("size").map(_.asBytes())
+    case TotalSize      => mailetConfig.getOptionalSize("totalSize").map(_.asBytes())
+  }).map(AllowedQuantity.validate(_).orThrow(s"invalid quantity for ${entityType.asString}"))
+    .map(quantity => Rules(Seq(Rule(quantity, duration))))
+
+  def extractQuantity(entityType: EntityType, mail: Mail): Option[Increment] = entityType match {
+    case Count      => Some(1)
+    case Recipients =>
+      Some(Increment
+        .validate(mail.getRecipients.size())
+        .orThrow(s"invalid quantity for ${entityType.asString}"))
+    case Size       =>
+      Some(Increment
+        .validate(mail.getMessageSize.toInt)
+        .orThrow(s"invalid quantity for ${entityType.asString}"))
+    case TotalSize      =>
+      Try(Math.multiplyExact(mail.getMessageSize.toInt, mail.getRecipients.size()))
+        .map(Increment.validate(_).orThrow(s"invalid quantity for ${entityType.asString}"))
+        .toOption
+  }
 }
 
 sealed trait EntityType {
-  def asString(): String
-
-  def extractQuantity(mail: Mail): Option[Increment]
-
-  def extractRules(duration: Duration, mailetConfig: MailetConfig): Option[Rules]
+  def asString: String
 }
 
 case object Count extends EntityType {
-  override def asString(): String = "count"
-
-  override def extractQuantity(mail: Mail): Option[Increment] = Some(1)
-
-  override def extractRules(duration: Duration, mailetConfig: MailetConfig): Option[Rules] = Option(mailetConfig.getInitParameter("count"))
-    .map(_.toLong)
-    .map(AllowedQuantity.liftOrThrow)
-    .map(quantity => Rules(Seq(Rule(quantity, duration))))
+  override val asString: String = "count"
 }
 
-case object RecipientsType extends EntityType {
-  override def asString(): String = "recipients"
-
-  override def extractQuantity(mail: Mail): Option[Increment] = Some(Increment.liftOrThrow(mail.getRecipients.size()))
-
-  override def extractRules(duration: Duration, mailetConfig: MailetConfig): Option[Rules] = Option(mailetConfig.getInitParameter("recipients"))
-    .map(_.toLong)
-    .map(AllowedQuantity.liftOrThrow)
-    .map(quantity => Rules(Seq(Rule(quantity, duration))))
+case object Recipients extends EntityType {
+  override val asString: String = "recipients"
 }
 
 case object Size extends EntityType {
-  override def asString(): String = "size"
-
-  override def extractQuantity(mail: Mail): Option[Increment] = Some(Increment.liftOrThrow(mail.getMessageSize.toInt))
-
-  override def extractRules(duration: Duration, mailetConfig: MailetConfig): Option[Rules] = Option(mailetConfig.getInitParameter("size"))
-    .map {
-      case "" => throw new IllegalArgumentException("'size' field cannot be empty if specified")
-      case s => s
-    }
-    .map(org.apache.james.util.Size.parse)
-    .map(_.asBytes())
-    .map(AllowedQuantity.liftOrThrow)
-    .map(quantity => Rules(Seq(Rule(quantity, duration))))
+  override val asString: String = "size"
 }
 
 case object TotalSize extends EntityType {
-  override def asString(): String = "totalSize"
-
-  override def extractQuantity(mail: Mail): Option[Increment] =
-    Try(Math.multiplyExact(mail.getMessageSize.toInt, mail.getRecipients.size()))
-      .map(Increment.liftOrThrow)
-      .toOption
-
-  override def extractRules(duration: Duration, mailetConfig: MailetConfig): Option[Rules] = Option(mailetConfig.getInitParameter("totalSize"))
-    .map {
-      case "" => throw new IllegalArgumentException("'totalSize' field cannot be empty if specified")
-      case s => s
-    }
-    .map(org.apache.james.util.Size.parse)
-    .map(_.asBytes())
-    .map(AllowedQuantity.liftOrThrow)
-    .map(quantity => Rules(Seq(Rule(quantity, duration))))
+  override val asString: String = "totalSize"
 }

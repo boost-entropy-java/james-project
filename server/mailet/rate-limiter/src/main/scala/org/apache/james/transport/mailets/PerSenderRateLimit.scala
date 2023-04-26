@@ -21,12 +21,13 @@ package org.apache.james.transport.mailets
 
 import java.time.Duration
 import java.util
-
 import com.google.common.annotations.VisibleForTesting
 import com.google.common.collect.ImmutableList
+
 import javax.inject.Inject
 import org.apache.james.core.MailAddress
 import org.apache.james.rate.limiter.api.{AcceptableRate, RateExceeded, RateLimiter, RateLimiterFactory, RateLimitingKey, RateLimitingResult}
+import org.apache.james.transport.mailets.ConfigurationOps.DurationOps
 import org.apache.mailet.base.GenericMailet
 import org.apache.mailet.{Mail, ProcessingState}
 import org.reactivestreams.Publisher
@@ -37,7 +38,7 @@ case class PerSenderRateLimiter(rateLimiter: Option[RateLimiter], keyPrefix: Opt
     val rateLimitingKey = SenderKey(keyPrefix, entityType, sender)
 
     rateLimiter.map(limiter =>
-      entityType.extractQuantity(mail)
+      EntityType.extractQuantity(entityType, mail)
         .map(increment => limiter.rateLimit(rateLimitingKey, increment))
         .getOrElse(SMono.just[RateLimitingResult](RateExceeded)))
       .getOrElse(SMono.just[RateLimitingResult](AcceptableRate))
@@ -45,8 +46,8 @@ case class PerSenderRateLimiter(rateLimiter: Option[RateLimiter], keyPrefix: Opt
 }
 
 case class SenderKey(keyPrefix: Option[KeyPrefix], entityType: EntityType, mailAddress: MailAddress) extends RateLimitingKey {
-  override def asString(): String = keyPrefix.map(prefix => s"${prefix.value}_${entityType.asString()}_${mailAddress.asString()}")
-    .getOrElse(s"${entityType.asString()}_${mailAddress.asString()}")
+  override def asString(): String = keyPrefix.map(prefix => s"${prefix.value}_${entityType.asString}_${mailAddress.asString()}")
+    .getOrElse(s"${entityType.asString}_${mailAddress.asString()}")
 }
 
 /**
@@ -109,7 +110,7 @@ class PerSenderRateLimit @Inject()(rateLimiterFactory: RateLimiterFactory) exten
 
   override def init(): Unit = {
     val duration: Duration = parseDuration()
-    val precision: Option[Duration] = parsePrecision()
+    val precision: Option[Duration] = getMailetConfig.getDuration("precision")
 
     keyPrefix = Option(getInitParameter("keyPrefix")).map(KeyPrefix)
     exceededProcessor = getInitParameter("exceededProcessor", Mail.ERROR)
@@ -117,14 +118,14 @@ class PerSenderRateLimit @Inject()(rateLimiterFactory: RateLimiterFactory) exten
     def perSenderRateLimiter(entityType: EntityType): PerSenderRateLimiter = createRateLimiter(rateLimiterFactory, entityType, keyPrefix, duration, precision)
 
     countRateLimiter = perSenderRateLimiter(Count)
-    recipientsRateLimiter = perSenderRateLimiter(RecipientsType)
+    recipientsRateLimiter = perSenderRateLimiter(Recipients)
     sizeRateLimiter = perSenderRateLimiter(Size)
     totalSizeRateLimiter = perSenderRateLimiter(TotalSize)
   }
 
   @VisibleForTesting
-  def parseDuration(): Duration = DurationParsingUtil.parseDuration(getMailetConfig)
-  def parsePrecision(): Option[Duration] = PrecisionParsingUtil.parsePrecision(getMailetConfig)
+  def parseDuration(): Duration = getMailetConfig.getDuration("duration")
+    .getOrElse(throw new IllegalArgumentException("'duration' is compulsory"))
 
   override def service(mail: Mail): Unit = mail.getMaybeSender
       .asOptional()
@@ -149,7 +150,7 @@ class PerSenderRateLimit @Inject()(rateLimiterFactory: RateLimiterFactory) exten
 
   private def createRateLimiter(rateLimiterFactory: RateLimiterFactory, entityType: EntityType, keyPrefix: Option[KeyPrefix],
                                 duration: Duration, precision: Option[Duration]): PerSenderRateLimiter =
-    PerSenderRateLimiter(rateLimiter = entityType.extractRules(duration, getMailetConfig)
+    PerSenderRateLimiter(rateLimiter = EntityType.extractRules(entityType, duration, getMailetConfig)
       .map(rateLimiterFactory.withSpecification(_, precision)),
       keyPrefix = keyPrefix,
       entityType = entityType)

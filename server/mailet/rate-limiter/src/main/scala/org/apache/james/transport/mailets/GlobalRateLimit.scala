@@ -21,8 +21,8 @@ package org.apache.james.transport.mailets
 
 import java.time.Duration
 import java.util
-
 import com.google.common.collect.ImmutableList
+
 import javax.inject.Inject
 import org.apache.james.rate.limiter.api.{AcceptableRate, RateExceeded, RateLimiter, RateLimiterFactory, RateLimitingKey, RateLimitingResult}
 import org.apache.mailet.base.GenericMailet
@@ -31,22 +31,27 @@ import org.reactivestreams.Publisher
 import reactor.core.scala.publisher.{SFlux, SMono}
 
 case class GlobalKey(keyPrefix: Option[KeyPrefix], entityType: EntityType) extends RateLimitingKey {
-  val globalPrefix: String = "global"
-
-  override def asString(): String = keyPrefix.map(prefix => s"${prefix.value}_${entityType.asString()}_$globalPrefix}")
-    .getOrElse(s"${entityType.asString()}_$globalPrefix")
+  override val asString: String = {
+    val key = s"${entityType.asString}_global}"
+    keyPrefix.map(prefix => s"${prefix.value}_$key").getOrElse(key)
+  }
 }
 
-case class GlobalRateLimiter(rateLimiter: Option[RateLimiter], keyPrefix: Option[KeyPrefix], entityType: EntityType) {
-  def rateLimit(mail: Mail): Publisher[RateLimitingResult] = {
+trait GlobalRateLimiter {
+  def rateLimit(mail: Mail): Publisher[RateLimitingResult]
+}
+
+object GlobalRateLimiter {
+  def fromRateLimiter(rateLimiter: RateLimiter, keyPrefix: Option[KeyPrefix], entityType: EntityType): GlobalRateLimiter = {
     val rateLimitingKey = GlobalKey(keyPrefix, entityType)
 
-    rateLimiter.map(limiter =>
-      entityType.extractQuantity(mail)
-        .map(increment => limiter.rateLimit(rateLimitingKey, increment))
-        .getOrElse(SMono.just[RateLimitingResult](RateExceeded)))
-      .getOrElse(SMono.just[RateLimitingResult](AcceptableRate))
+    mail =>
+      EntityType.extractQuantity(entityType, mail)
+        .map(increment => rateLimiter.rateLimit(rateLimitingKey, increment))
+        .getOrElse(SMono.just[RateLimitingResult](RateExceeded))
   }
+
+  val acceptAll: GlobalRateLimiter = mail => SMono.just[RateLimitingResult](AcceptableRate)
 }
 
 /**
@@ -108,8 +113,12 @@ class GlobalRateLimit @Inject()(rateLimiterFactory: RateLimiterFactory) extends 
   private var keyPrefix: Option[KeyPrefix] = _
 
   override def init(): Unit = {
-    val duration: Duration = parseDuration()
-    val precision: Option[Duration] = parsePrecision()
+    import org.apache.james.transport.mailets.ConfigurationOps.DurationOps
+
+    val duration: Duration = getMailetConfig.getDuration("duration")
+      .getOrElse(throw new IllegalArgumentException("'duration' is compulsory"))
+
+    val precision: Option[Duration] = getMailetConfig.getDuration("precision")
 
     keyPrefix = Option(getInitParameter("keyPrefix")).map(KeyPrefix)
     exceededProcessor = getInitParameter("exceededProcessor", Mail.ERROR)
@@ -117,13 +126,10 @@ class GlobalRateLimit @Inject()(rateLimiterFactory: RateLimiterFactory) extends 
     def globalRateLimiter(entityType: EntityType): GlobalRateLimiter = createRateLimiter(rateLimiterFactory, entityType, keyPrefix, duration, precision)
 
     countRateLimiter = globalRateLimiter(Count)
-    recipientsRateLimiter = globalRateLimiter(RecipientsType)
+    recipientsRateLimiter = globalRateLimiter(Recipients)
     sizeRateLimiter = globalRateLimiter(Size)
     totalSizeRateLimiter = globalRateLimiter(TotalSize)
   }
-
-  def parseDuration(): Duration = DurationParsingUtil.parseDuration(getMailetConfig)
-  def parsePrecision(): Option[Duration] = PrecisionParsingUtil.parsePrecision(getMailetConfig)
 
   override def service(mail: Mail): Unit = {
     val pivot: RateLimitingResult = AcceptableRate
@@ -140,12 +146,17 @@ class GlobalRateLimit @Inject()(rateLimiterFactory: RateLimiterFactory) extends 
     }
   }
 
+
   private def createRateLimiter(rateLimiterFactory: RateLimiterFactory, entityType: EntityType, keyPrefix: Option[KeyPrefix],
                                 duration: Duration, precision: Option[Duration]): GlobalRateLimiter =
-    GlobalRateLimiter(rateLimiter = entityType.extractRules(duration, getMailetConfig)
-      .map(rateLimiterFactory.withSpecification(_, precision)),
-      keyPrefix = keyPrefix,
-      entityType = entityType)
+    EntityType.extractRules(entityType, duration, getMailetConfig)
+      .map(rateLimiterFactory.withSpecification(_, precision))
+      .map(rateLimiter =>
+        GlobalRateLimiter.fromRateLimiter(
+          rateLimiter = rateLimiter,
+          keyPrefix = keyPrefix,
+          entityType = entityType))
+      .getOrElse(GlobalRateLimiter.acceptAll)
 
 
   override def requiredProcessingState(): util.Collection[ProcessingState] = ImmutableList.of(new ProcessingState(exceededProcessor))
