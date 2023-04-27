@@ -74,6 +74,7 @@ import com.github.fge.lambdas.Throwing;
 import com.google.common.collect.ImmutableList;
 
 import it.unimi.dsi.fastutil.longs.LongArrayList;
+import it.unimi.dsi.fastutil.longs.LongComparators;
 import it.unimi.dsi.fastutil.longs.LongList;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -158,28 +159,14 @@ public class SearchProcessor extends AbstractMailboxProcessor<SearchRequest> imp
         if (resultOptions == null || resultOptions.isEmpty()) {
             return new SearchResponse(ids, highestModSeq.orElse(null));
         } else {
-            return handleResultOptions(request, session, uids, highestModSeq.orElse(null), ids);
+            return handleResultOptions(request, session, highestModSeq.orElse(null), ids);
         }
     }
 
-    private ImapResponseMessage handleResultOptions(SearchRequest request, ImapSession session, Collection<MessageUid> uids, ModSeq highestModSeq, LongList ids) {
+    private ImapResponseMessage handleResultOptions(SearchRequest request, ImapSession session, ModSeq highestModSeq, LongList ids) {
         List<SearchResultOption> resultOptions = request.getSearchOperation().getResultOptions();
-        List<Long> idList = new ArrayList<>(ids.size());
-        for (long id : ids) {
-            idList.add(id);
-        }
 
-        List<IdRange> idsAsRanges = new ArrayList<>();
-        for (Long id: idList) {
-            idsAsRanges.add(new IdRange(id));
-        }
-        IdRange[] idRanges = IdRange.mergeRanges(idsAsRanges).toArray(IdRange[]::new);
-
-        List<UidRange> uidsAsRanges = new ArrayList<>();
-        for (MessageUid uid: uids) {
-            uidsAsRanges.add(new UidRange(uid));
-        }
-        UidRange[] uidRanges = UidRange.mergeRanges(uidsAsRanges).toArray(UidRange[]::new);
+        IdRange[] idRanges = asRanges(ids);
 
         boolean esearch = false;
         for (SearchResultOption resultOption : resultOptions) {
@@ -194,11 +181,10 @@ public class SearchProcessor extends AbstractMailboxProcessor<SearchRequest> imp
             long max = -1;
             long count = ids.size();
 
-            if (ids.size() > 0) {
+            if (!ids.isEmpty()) {
                 min = ids.getLong(0);
                 max = ids.getLong(ids.size() - 1);
             }
-
 
             // Save the sequence-set for later usage. This is part of SEARCHRES
             if (resultOptions.contains(SearchResultOption.SAVE)) {
@@ -207,23 +193,54 @@ public class SearchProcessor extends AbstractMailboxProcessor<SearchRequest> imp
                     SearchResUtil.saveSequenceSet(session, idRanges);
                 } else {
                     List<IdRange> savedRanges = new ArrayList<>();
-                    if (resultOptions.contains(SearchResultOption.MIN)) {
+                    if (resultOptions.contains(SearchResultOption.MIN) && min > 0) {
                         // Store the MIN
                         savedRanges.add(new IdRange(min));
                     }
-                    if (resultOptions.contains(SearchResultOption.MAX)) {
+                    if (resultOptions.contains(SearchResultOption.MAX) && max > 0) {
                         // Store the MAX
                         savedRanges.add(new IdRange(max));
                     }
                     SearchResUtil.saveSequenceSet(session, savedRanges.toArray(IdRange[]::new));
                 }
             }
-            return new ESearchResponse(min, max, count, idRanges, uidRanges, highestModSeq, request.getTag(), request.isUseUids(), resultOptions);
+            return new ESearchResponse(min, max, count, idRanges, highestModSeq, request.getTag(), request.isUseUids(), resultOptions);
         } else {
             // Just save the returned sequence-set as this is not SEARCHRES + ESEARCH
             SearchResUtil.saveSequenceSet(session, idRanges);
             return new SearchResponse(ids, highestModSeq);
         }
+    }
+
+    /**
+     * Optimization of IdRange.mergeRanges(idsAsRanges) for list of long
+     */
+    private IdRange[] asRanges(LongList ids) {
+        ids.sort(LongComparators.NATURAL_COMPARATOR);
+        List<IdRange> idsAsRanges = new ArrayList<>();
+        long lowBound = -1;
+        long highBound = -1;
+        for (int i = 0; i < ids.size(); i++) {
+            long id = ids.getLong(i);
+            // Initialize
+            if (lowBound == -1) {
+                lowBound = id;
+                highBound = id;
+                continue;
+            }
+            if (id == highBound + 1) {
+                highBound = id;
+                continue;
+            }
+            idsAsRanges.add(new IdRange(lowBound, highBound));
+            lowBound = id;
+            highBound = id;
+        }
+        if (lowBound != -1 && highBound != -1) {
+            idsAsRanges.add(new IdRange(lowBound, highBound));
+        }
+        IdRange[] result = new IdRange[idsAsRanges.size()];
+        return idsAsRanges.toArray(result);
     }
 
     private LongList asResults(ImapSession session, boolean useUids, Collection<MessageUid> uids) {
