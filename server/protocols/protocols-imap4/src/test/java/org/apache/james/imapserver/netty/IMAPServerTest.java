@@ -569,6 +569,15 @@ class IMAPServerTest {
 
             inbox.getMessageByUID(1);
         }
+
+        @Test
+        void compressShouldFailWhenUnknownCompressionAlgorithm() throws Exception {
+            String reply = testIMAPClient.connect("127.0.0.1", port)
+                .login(USER.asString(), USER_PASS)
+                .sendCommand("COMPRESS BAD");
+
+            assertThat(reply).contains("AAAB BAD COMPRESS failed. Illegal arguments.");
+        }
     }
 
     @Nested
@@ -2207,6 +2216,27 @@ class IMAPServerTest {
         }
 
         @Test
+        void storeShouldSucceedWhenUnchangedSinceIsNotExceededAndNotSilent() throws Exception {
+            clientConnection.write(ByteBuffer.wrap(String.format("a0 LOGIN %s %s\r\n", USER.asString(), USER_PASS).getBytes(StandardCharsets.UTF_8)));
+            readBytes(clientConnection);
+
+            clientConnection.write(ByteBuffer.wrap(("A142 SELECT INBOX (CONDSTORE)\r\n").getBytes(StandardCharsets.UTF_8)));
+
+            readStringUntil(clientConnection, s -> s.contains("A142 OK [READ-WRITE] SELECT completed."));
+
+            inbox.setFlags(new Flags(ANSWERED), REPLACE, MessageRange.one(MessageUid.of(35)), mailboxSession);
+            ModSeq highestModSeq = inbox.getMetaData(IGNORE, mailboxSession, NO_COUNT).getHighestModSeq();
+
+            clientConnection.write(ByteBuffer.wrap(("a2 NOOP\r\n").getBytes(StandardCharsets.UTF_8)));
+            readStringUntil(clientConnection, s -> s.contains("a2 OK NOOP completed."));
+
+            clientConnection.write(ByteBuffer.wrap((String.format("a103 UID STORE 35 (UNCHANGEDSINCE %d) +FLAGS (\\Seen)\r\n", highestModSeq.asLong()).getBytes(StandardCharsets.UTF_8))));
+            assertThat(readStringUntil(clientConnection, s -> s.contains("a103 OK STORE completed.")))
+                .filteredOn(s -> s.contains("* 35 FETCH (MODSEQ (40) FLAGS (\\Answered \\Recent \\Seen) UID 35)"))
+                .hasSize(1);
+        }
+
+        @Test
         void storeShouldFailWhenUnchangedSinceIsExceeded() throws Exception {
             clientConnection.write(ByteBuffer.wrap(String.format("a0 LOGIN %s %s\r\n", USER.asString(), USER_PASS).getBytes(StandardCharsets.UTF_8)));
             readBytes(clientConnection);
@@ -2227,6 +2257,66 @@ class IMAPServerTest {
         }
 
         @Test
+        void storeShouldFailWhenUnchangedSinceIsZero() throws Exception {
+            clientConnection.write(ByteBuffer.wrap(String.format("a0 LOGIN %s %s\r\n", USER.asString(), USER_PASS).getBytes(StandardCharsets.UTF_8)));
+            readBytes(clientConnection);
+
+            clientConnection.write(ByteBuffer.wrap(("A142 SELECT INBOX (CONDSTORE)\r\n").getBytes(StandardCharsets.UTF_8)));
+
+            readStringUntil(clientConnection, s -> s.contains("A142 OK [READ-WRITE] SELECT completed."));
+
+            inbox.setFlags(new Flags("dcustom"), REPLACE, MessageRange.one(MessageUid.of(35)), mailboxSession);
+            ModSeq highestModSeq = inbox.getMetaData(IGNORE, mailboxSession, NO_COUNT).getHighestModSeq();
+
+            clientConnection.write(ByteBuffer.wrap(("a2 NOOP\r\n").getBytes(StandardCharsets.UTF_8)));
+            readStringUntil(clientConnection, s -> s.contains("a2 OK NOOP completed."));
+
+            clientConnection.write(ByteBuffer.wrap((String.format("a103 UID STORE 35 (UNCHANGEDSINCE 0) +FLAGS.SILENT (dcustom)\r\n", highestModSeq.asLong() - 1).getBytes(StandardCharsets.UTF_8))));
+            assertThat(readStringUntil(clientConnection, s -> s.contains("a103 OK [MODIFIED 0 35] STORE failed.")))
+                .isNotNull();
+        }
+
+        @Test
+        void storeShouldFailWhenUnchangedSinceIsZeroAndMsn() throws Exception {
+            clientConnection.write(ByteBuffer.wrap(String.format("a0 LOGIN %s %s\r\n", USER.asString(), USER_PASS).getBytes(StandardCharsets.UTF_8)));
+            readBytes(clientConnection);
+
+            clientConnection.write(ByteBuffer.wrap(("A142 SELECT INBOX (CONDSTORE)\r\n").getBytes(StandardCharsets.UTF_8)));
+
+            readStringUntil(clientConnection, s -> s.contains("A142 OK [READ-WRITE] SELECT completed."));
+
+            inbox.setFlags(new Flags("dcustom"), REPLACE, MessageRange.one(MessageUid.of(35)), mailboxSession);
+            ModSeq highestModSeq = inbox.getMetaData(IGNORE, mailboxSession, NO_COUNT).getHighestModSeq();
+
+            clientConnection.write(ByteBuffer.wrap(("a2 NOOP\r\n").getBytes(StandardCharsets.UTF_8)));
+            readStringUntil(clientConnection, s -> s.contains("a2 OK NOOP completed."));
+
+            clientConnection.write(ByteBuffer.wrap((String.format("a103 STORE 35 (UNCHANGEDSINCE 0) +FLAGS.SILENT (dcustom)\r\n", highestModSeq.asLong() - 1).getBytes(StandardCharsets.UTF_8))));
+            assertThat(readStringUntil(clientConnection, s -> s.contains("a103 OK [MODIFIED 0 35] STORE failed.")))
+                .isNotNull();
+        }
+
+        @Test
+        void storeShouldFailWhenUnchangedSinceIsZeroAndSystemFlagsUpdate() throws Exception {
+            clientConnection.write(ByteBuffer.wrap(String.format("a0 LOGIN %s %s\r\n", USER.asString(), USER_PASS).getBytes(StandardCharsets.UTF_8)));
+            readBytes(clientConnection);
+
+            clientConnection.write(ByteBuffer.wrap(("A142 SELECT INBOX (CONDSTORE)\r\n").getBytes(StandardCharsets.UTF_8)));
+
+            readStringUntil(clientConnection, s -> s.contains("A142 OK [READ-WRITE] SELECT completed."));
+
+            inbox.setFlags(new Flags("dcustom"), REPLACE, MessageRange.one(MessageUid.of(35)), mailboxSession);
+            ModSeq highestModSeq = inbox.getMetaData(IGNORE, mailboxSession, NO_COUNT).getHighestModSeq();
+
+            clientConnection.write(ByteBuffer.wrap(("a2 NOOP\r\n").getBytes(StandardCharsets.UTF_8)));
+            readStringUntil(clientConnection, s -> s.contains("a2 OK NOOP completed."));
+
+            clientConnection.write(ByteBuffer.wrap((String.format("a103 UID STORE 35 (UNCHANGEDSINCE 0) +FLAGS.SILENT (\\Answered)\r\n", highestModSeq.asLong() - 1).getBytes(StandardCharsets.UTF_8))));
+            assertThat(readStringUntil(clientConnection, s -> s.contains("a103 OK [MODIFIED 0 35] STORE failed.")))
+                .isNotNull();
+        }
+
+        @Test
         void storeShouldFailWhenSomeMessagesDoNotMatch() throws Exception {
             clientConnection.write(ByteBuffer.wrap(String.format("a0 LOGIN %s %s\r\n", USER.asString(), USER_PASS).getBytes(StandardCharsets.UTF_8)));
             readBytes(clientConnection);
@@ -2237,7 +2327,7 @@ class IMAPServerTest {
 
             ModSeq highestModSeq = inbox.getMetaData(IGNORE, mailboxSession, NO_COUNT).getHighestModSeq();
 
-            inbox.setFlags(new Flags(ANSWERED), REPLACE, MessageRange.one(MessageUid.of(7)), mailboxSession);
+            inbox.setFlags(new Flags("custom"), REPLACE, MessageRange.one(MessageUid.of(7)), mailboxSession);
             inbox.setFlags(new Flags(ANSWERED), REPLACE, MessageRange.one(MessageUid.of(9)), mailboxSession);
 
             clientConnection.write(ByteBuffer.wrap(("a2 NOOP\r\n").getBytes(StandardCharsets.UTF_8)));
@@ -2282,6 +2372,15 @@ class IMAPServerTest {
             IntStream.range(0, 37)
                 .forEach(Throwing.intConsumer(i -> inbox.appendMessage(MessageManager.AppendCommand.builder()
                     .build("MIME-Version: 1.0\r\n\r\nCONTENT\r\n"), mailboxSession)));
+        }
+
+        @Test
+        void compressShouldFailWhenNotEnabled() throws Exception {
+            String reply = testIMAPClient.connect("127.0.0.1", imapServer.getListenAddresses().get(0).getPort())
+                .login(USER.asString(), USER_PASS)
+                .sendCommand("COMPRESS DEFLATE");
+
+            assertThat(reply).contains("AAAB BAD COMPRESS failed. Unknown command.");
         }
 
         @Test
@@ -2700,6 +2799,52 @@ class IMAPServerTest {
             assertThat(readStringUntil(clientConnection, s -> s.contains("I00104 OK FETCH completed.")))
                 .filteredOn(s -> s.contains("* VANISHED (EARLIER) 14"))
                 .hasSize(1);
+        }
+
+        @Test
+        void fetchShouldSupportVanishedModifiedWithoutChangedSince() throws Exception {
+            inbox.delete(ImmutableList.of(MessageUid.of(14)), mailboxSession);
+
+            clientConnection.write(ByteBuffer.wrap(String.format("a0 LOGIN %s %s\r\n", USER.asString(), USER_PASS).getBytes(StandardCharsets.UTF_8)));
+            readBytes(clientConnection);
+            clientConnection.write(ByteBuffer.wrap(("a1 ENABLE QRESYNC\r\n").getBytes(StandardCharsets.UTF_8)));
+            readStringUntil(clientConnection, s -> s.contains("a1 OK ENABLE completed."));
+            clientConnection.write(ByteBuffer.wrap(("a2 SELECT INBOX\r\n").getBytes(StandardCharsets.UTF_8)));
+            readStringUntil(clientConnection, s -> s.contains("a2 OK [READ-WRITE] SELECT completed."));
+
+            memoryIntegrationResources.getMailboxManager().getMailbox(MailboxPath.inbox(USER), mailboxSession)
+                .setFlags(new Flags(ANSWERED), REPLACE, MessageRange.one(MessageUid.of(10)), mailboxSession);
+            memoryIntegrationResources.getMailboxManager().getMailbox(MailboxPath.inbox(USER), mailboxSession)
+                .setFlags(new Flags(ANSWERED), REPLACE, MessageRange.one(MessageUid.of(25)), mailboxSession);
+
+            ModSeq highestModSeq = memoryIntegrationResources.getMailboxManager().getMailbox(MailboxPath.inbox(USER), mailboxSession)
+                .getMetaData(IGNORE, mailboxSession, NO_COUNT)
+                .getHighestModSeq();
+            clientConnection.write(ByteBuffer.wrap(String.format("I00104 UID FETCH 12:37 (FLAGS) (VANISHED)\r\n", highestModSeq.asLong()).getBytes(StandardCharsets.UTF_8)));
+
+            assertThat(new String(readBytes(clientConnection))).contains("I00104 BAD FETCH VANISHED used without CHANGEDSINCE");
+        }
+
+        @Test
+        void fetchShouldRejectVanishedWhenNoQRESYNC() throws Exception {
+            inbox.delete(ImmutableList.of(MessageUid.of(14)), mailboxSession);
+
+            clientConnection.write(ByteBuffer.wrap(String.format("a0 LOGIN %s %s\r\n", USER.asString(), USER_PASS).getBytes(StandardCharsets.UTF_8)));
+            readBytes(clientConnection);
+            clientConnection.write(ByteBuffer.wrap(("a2 SELECT INBOX\r\n").getBytes(StandardCharsets.UTF_8)));
+            readStringUntil(clientConnection, s -> s.contains("a2 OK [READ-WRITE] SELECT completed."));
+
+            memoryIntegrationResources.getMailboxManager().getMailbox(MailboxPath.inbox(USER), mailboxSession)
+                .setFlags(new Flags(ANSWERED), REPLACE, MessageRange.one(MessageUid.of(10)), mailboxSession);
+            memoryIntegrationResources.getMailboxManager().getMailbox(MailboxPath.inbox(USER), mailboxSession)
+                .setFlags(new Flags(ANSWERED), REPLACE, MessageRange.one(MessageUid.of(25)), mailboxSession);
+
+            ModSeq highestModSeq = memoryIntegrationResources.getMailboxManager().getMailbox(MailboxPath.inbox(USER), mailboxSession)
+                .getMetaData(IGNORE, mailboxSession, NO_COUNT)
+                .getHighestModSeq();
+            clientConnection.write(ByteBuffer.wrap(String.format("I00104 UID FETCH 12:37 (FLAGS) (CHANGEDSINCE %d VANISHED)\r\n", highestModSeq.asLong()).getBytes(StandardCharsets.UTF_8)));
+
+            assertThat(new String(readBytes(clientConnection))).contains("I00104 BAD FETCH QRESYNC not enabled.");
         }
 
         @Test
