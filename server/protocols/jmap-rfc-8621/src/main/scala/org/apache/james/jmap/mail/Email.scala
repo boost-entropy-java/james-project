@@ -19,6 +19,7 @@
 
 package org.apache.james.jmap.mail
 
+import java.io.InputStream
 import java.nio.charset.StandardCharsets.US_ASCII
 import java.time.ZoneId
 import java.util.Date
@@ -34,6 +35,8 @@ import org.apache.james.jmap.api.projections.{MessageFastViewPrecomputedProperti
 import org.apache.james.jmap.core.Id.{Id, IdConstraint}
 import org.apache.james.jmap.core.{Properties, UTCDate}
 import org.apache.james.jmap.mail.BracketHeader.sanitize
+import org.apache.james.jmap.mail.EmailFullViewFactory.extractBodyValues
+import org.apache.james.jmap.mail.EmailGetRequest.MaxBodyValueBytes
 import org.apache.james.jmap.mail.EmailHeaderName.{ADDRESSES_NAMES, DATE, MESSAGE_ID_NAMES}
 import org.apache.james.jmap.mail.FastViewWithAttachmentsMetadataReadLevel.supportedByFastViewWithAttachments
 import org.apache.james.jmap.mail.KeywordsFactory.LENIENT_KEYWORDS_FACTORY
@@ -69,17 +72,54 @@ object Email {
     "preview", "hasAttachment", "keywords")
   val idProperty: Properties = Properties("id")
 
+  def validateProperties(properties: Option[Properties]): Either[IllegalArgumentException, Properties] =
+    properties match {
+      case None => scala.Right(Email.defaultProperties)
+      case Some(properties) =>
+        val invalidProperties: Set[NonEmptyString] = properties.value
+          .flatMap(property => SpecificHeaderRequest.from(property)
+            .fold(
+              invalidProperty => Some(invalidProperty),
+              _ => None
+            )) -- Email.allowedProperties.value
+
+        if (invalidProperties.nonEmpty) {
+          Left(new IllegalArgumentException(s"The following properties [${invalidProperties.map(p => p.value).mkString(", ")}] do not exist."))
+        } else {
+          scala.Right(properties ++ Email.idProperty)
+        }
+    }
+
+  def validateBodyProperties(bodyProperties: Option[Properties]): Either[IllegalArgumentException, Properties] =
+    bodyProperties match {
+      case None => scala.Right(EmailBodyPart.defaultProperties)
+      case Some(properties) =>
+        val invalidProperties: Set[NonEmptyString] = properties.value
+          .flatMap(property => SpecificHeaderRequest.from(property)
+            .fold(
+              invalidProperty => Some(invalidProperty),
+              _ => None
+            )) -- EmailBodyPart.allowedProperties.value
+
+        if (invalidProperties.nonEmpty) {
+          Left(new IllegalArgumentException(s"The following bodyProperties [${invalidProperties.map(p => p.value).mkString(", ")}] do not exist."))
+        } else {
+          scala.Right(properties)
+        }
+    }
+
   def asUnparsed(messageId: MessageId): Try[UnparsedEmailId] =
     refined.refineV[IdConstraint](messageId.serialize()) match {
       case Left(e) => Failure(new IllegalArgumentException(e))
       case scala.Right(value) => Success(UnparsedEmailId(value))
     }
 
-  private[mail] def parseAsMime4JMessage(firstMessage: MessageResult): Try[Message] = {
+  private[mail] def parseAsMime4JMessage(messageResult: MessageResult): Try[Message] = parseStreamAsMime4JMessage(messageResult.getFullContent.getInputStream)
+
+  def parseStreamAsMime4JMessage(inputStream: => InputStream): Try[Message] = {
     val defaultMessageBuilder = new DefaultMessageBuilder
     defaultMessageBuilder.setMimeEntityConfig(MimeConfig.PERMISSIVE)
     defaultMessageBuilder.setDecodeMonitor(DecodeMonitor.SILENT)
-    val inputStream = firstMessage.getFullContent.getInputStream
     val resultMessage = Try(defaultMessageBuilder.parseMessage(inputStream))
     resultMessage.fold(e => {
       Try(inputStream.close())
@@ -253,10 +293,12 @@ case class EmailMetadata(id: MessageId,
                          size: Size,
                          receivedAt: UTCDate)
 
+case class EmailParseMetadata(blobId: BlobId, size: Size)
+
 object EmailHeaders {
   val SPECIFIC_HEADER_PREFIX = "header:"
 
-  private[mail] def from(zoneId: ZoneId)(mime4JMessage: Message): EmailHeaders = {
+  def from(zoneId: ZoneId)(mime4JMessage: Message): EmailHeaders =
     EmailHeaders(
       headers = asEmailHeaders(mime4JMessage.getHeader),
       messageId = extractMessageId(mime4JMessage, "Message-Id"),
@@ -270,14 +312,12 @@ object EmailHeaders {
       sender = extractAddresses(mime4JMessage, "Sender"),
       subject = extractSubject(mime4JMessage),
       sentAt = extractDate(mime4JMessage, "Date").map(date => UTCDate.from(date, zoneId)))
-  }
 
-  def extractSpecificHeaders(properties: Option[Properties])(zoneId: ZoneId, header: org.apache.james.mime4j.dom.Header) = {
+  def extractSpecificHeaders(properties: Option[Properties])(zoneId: ZoneId, header: org.apache.james.mime4j.dom.Header) =
     properties.getOrElse(Properties.empty()).value
       .flatMap(property => SpecificHeaderRequest.from(property).toOption)
       .map(_.retrieveHeader(zoneId, header))
       .toMap
-  }
 
   private def asEmailHeaders(header: Header): List[EmailHeader] =
     header.iterator()
@@ -326,7 +366,6 @@ object EmailHeaders {
     Option(mime4JMessage.getHeader.getFields(fieldName))
       .map(_.asScala)
       .flatMap(fields => fields.reverse.headOption)
-
 }
 
 case class EmailHeaders(headers: List[EmailHeader],
@@ -356,6 +395,12 @@ sealed trait EmailView {
 }
 
 case class EmailMetadataView(metadata: EmailMetadata) extends EmailView
+
+case class EmailParseView(metadata: EmailParseMetadata,
+                          header: EmailHeaders,
+                          body: EmailBody,
+                          bodyMetadata: EmailBodyMetadata,
+                          specificHeaders: Map[String, Option[EmailHeaderValue]])
 
 case class EmailHeaderView(metadata: EmailMetadata,
                            header: EmailHeaders,
@@ -495,6 +540,48 @@ private class EmailHeaderViewFactory @Inject()(zoneIdProvider: ZoneIdProvider) e
   }
 }
 
+object EmailFullViewFactory {
+  def extractBodyValues(htmlTextExtractor: HtmlTextExtractor)(bodyStructure: EmailBodyPart, request: EmailGetRequest): Try[Map[PartId, EmailBodyValue]] = for {
+    textBodyValues <- extractTextBodyValues(htmlTextExtractor)(bodyStructure.textBody, request.maxBodyValueBytes, request.fetchTextBodyValues.exists(_.value))
+    htmlBodyValues <- extractBodyValues(bodyStructure.htmlBody, request.maxBodyValueBytes, request.fetchHTMLBodyValues.exists(_.value))
+    allBodyValues <- extractBodyValues(bodyStructure.flatten, request.maxBodyValueBytes, request.fetchAllBodyValues.exists(_.value))
+  } yield {
+    (textBodyValues ++ htmlBodyValues ++ allBodyValues)
+      .distinctBy(_._1)
+      .toMap
+  }
+
+  def extractBodyValuesForParse(htmlTextExtractor: HtmlTextExtractor)(bodyStructure: EmailBodyPart, request: EmailParseRequest): Try[Map[PartId, EmailBodyValue]] = for {
+    textBodyValues <- extractTextBodyValues(htmlTextExtractor)(bodyStructure.textBody, request.maxBodyValueBytes, request.fetchTextBodyValues.exists(_.value))
+    htmlBodyValues <- extractBodyValues(bodyStructure.htmlBody, request.maxBodyValueBytes, request.fetchHTMLBodyValues.exists(_.value))
+    allBodyValues <- extractBodyValues(bodyStructure.flatten, request.maxBodyValueBytes, request.fetchAllBodyValues.exists(_.value))
+  } yield {
+    (textBodyValues ++ htmlBodyValues ++ allBodyValues)
+      .distinctBy(_._1)
+      .toMap
+  }
+
+  private def extractBodyValues(parts: List[EmailBodyPart], maxBodyBytes: Option[MaxBodyValueBytes], shouldFetch: Boolean): Try[List[(PartId, EmailBodyValue)]] =
+    if (shouldFetch) {
+      parts
+        .map(part => part.bodyContent.map(bodyValue => bodyValue.map(b => (part.partId, b.truncate(maxBodyBytes)))))
+        .sequence
+        .map(list => list.flatten)
+    } else {
+      Success(Nil)
+    }
+
+  private def extractTextBodyValues(htmlTextExtractor: HtmlTextExtractor)(parts: List[EmailBodyPart], maxBodyBytes: Option[MaxBodyValueBytes], shouldFetch: Boolean): Try[List[(PartId, EmailBodyValue)]] =
+    if (shouldFetch) {
+      parts
+        .map(part => part.textBodyContent(htmlTextExtractor).map(bodyValue => bodyValue.map(b => (part.partId, b.truncate(maxBodyBytes)))))
+        .sequence
+        .map(list => list.flatten)
+    } else {
+      Success(Nil)
+    }
+}
+
 private class EmailFullViewFactory @Inject()(zoneIdProvider: ZoneIdProvider, previewFactory: Preview.Factory) extends EmailViewFactory[EmailFullView] {
   override def toEmail(htmlTextExtractor: HtmlTextExtractor, request: EmailGetRequest)(message: (MessageId, Seq[MessageResult])): Try[EmailFullView] = {
     val messageId: MessageId = message._1
@@ -509,9 +596,9 @@ private class EmailFullViewFactory @Inject()(zoneIdProvider: ZoneIdProvider, pre
         .map(Success(_))
         .getOrElse(Failure(new IllegalArgumentException("No message supplied")))
       mime4JMessage <- Email.parseAsMime4JMessage(firstMessage)
-      bodyStructure <- EmailBodyPart.of(request.bodyProperties, zoneIdProvider.get(), messageId, mime4JMessage)
-      bodyValues <- extractBodyValues(htmlTextExtractor)(bodyStructure, request)
       blobId <- BlobId.of(messageId)
+      bodyStructure <- EmailBodyPart.of(request.bodyProperties, zoneIdProvider.get(), blobId, mime4JMessage)
+      bodyValues <- extractBodyValues(htmlTextExtractor)(bodyStructure, request)
       preview <- Try(previewFactory.fromMime4JMessage(mime4JMessage))
       keywords <- LENIENT_KEYWORDS_FACTORY.fromFlags(firstMessage.getFlags)
     } yield {
@@ -537,36 +624,6 @@ private class EmailFullViewFactory @Inject()(zoneIdProvider: ZoneIdProvider, pre
         specificHeaders = EmailHeaders.extractSpecificHeaders(request.properties)(zoneIdProvider.get(), mime4JMessage.getHeader))
     }
   }
-
-  private def extractBodyValues(htmlTextExtractor: HtmlTextExtractor)(bodyStructure: EmailBodyPart, request: EmailGetRequest): Try[Map[PartId, EmailBodyValue]] = for {
-    textBodyValues <- extractTextBodyValues(htmlTextExtractor)(bodyStructure.textBody, request, request.fetchTextBodyValues.exists(_.value))
-    htmlBodyValues <- extractBodyValues(bodyStructure.htmlBody, request, request.fetchHTMLBodyValues.exists(_.value))
-    allBodyValues <- extractBodyValues(bodyStructure.flatten, request, request.fetchAllBodyValues.exists(_.value))
-  } yield {
-    (textBodyValues ++ htmlBodyValues ++ allBodyValues)
-      .distinctBy(_._1)
-      .toMap
-  }
-
-  private def extractBodyValues(parts: List[EmailBodyPart], request: EmailGetRequest, shouldFetch: Boolean): Try[List[(PartId, EmailBodyValue)]] =
-    if (shouldFetch) {
-      parts
-        .map(part => part.bodyContent.map(bodyValue => bodyValue.map(b => (part.partId, b.truncate(request.maxBodyValueBytes)))))
-        .sequence
-        .map(list => list.flatten)
-    } else {
-      Success(Nil)
-    }
-
-  private def extractTextBodyValues(htmlTextExtractor: HtmlTextExtractor)(parts: List[EmailBodyPart], request: EmailGetRequest, shouldFetch: Boolean): Try[List[(PartId, EmailBodyValue)]] =
-    if (shouldFetch) {
-      parts
-        .map(part => part.textBodyContent(htmlTextExtractor).map(bodyValue => bodyValue.map(b => (part.partId, b.truncate(request.maxBodyValueBytes)))))
-        .sequence
-        .map(list => list.flatten)
-    } else {
-      Success(Nil)
-    }
 }
 
 private class EmailMetadataViewReader @Inject()(messageIdManager: MessageIdManager,

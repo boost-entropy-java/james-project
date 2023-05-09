@@ -19,19 +19,19 @@
 
 package org.apache.james.jmap.mail
 
-import eu.timepit.refined.refineV
-import org.apache.james.jmap.core.Id.{Id, IdConstraint}
-import org.apache.james.mailbox.model.MessageId
+import org.apache.james.jmap.api.change.Limit
+import org.apache.james.jmap.core.Id.Id
+import org.apache.james.jmap.core.{AccountId, UuidState}
+import org.apache.james.jmap.method.WithAccountId
 
-import scala.util.{Failure, Success, Try}
+case class IdentityChangesRequest(accountId: AccountId,
+                                  sinceState: UuidState,
+                                  maxChanges: Option[Limit]) extends WithAccountId
 
-object BlobId {
-  def of(string: String): Try[BlobId] = refineV[IdConstraint](string) match {
-      case scala.Right(value) => Success(BlobId(value))
-      case Left(e) => Failure(new IllegalArgumentException(e))
-    }
-  def of(messageId: MessageId): Try[BlobId] = of(messageId.serialize())
-  def of(messageId: BlobId, partId: PartId): Try[BlobId] = of(s"${messageId.value.value}_${partId.serialize}")
-}
-
-case class BlobId(value: Id)
+case class IdentityChangesResponse(accountId: AccountId,
+                                   oldState: UuidState,
+                                   newState: UuidState,
+                                   hasMoreChanges: HasMoreChanges,
+                                   created: List[Id],
+                                   updated: List[Id],
+                                   destroyed: List[Id])

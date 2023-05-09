@@ -17,21 +17,27 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.jmap.mail
+package org.apache.james.jmap.rfc8621.memory;
 
-import eu.timepit.refined.refineV
-import org.apache.james.jmap.core.Id.{Id, IdConstraint}
-import org.apache.james.mailbox.model.MessageId
+import static org.apache.james.data.UsersRepositoryModuleChooser.Implementation.DEFAULT;
 
-import scala.util.{Failure, Success, Try}
+import org.apache.james.JamesServerBuilder;
+import org.apache.james.JamesServerExtension;
+import org.apache.james.MemoryJamesConfiguration;
+import org.apache.james.MemoryJamesServerMain;
+import org.apache.james.jmap.rfc8621.contract.IdentityChangesContract;
+import org.apache.james.modules.TestJMAPServerModule;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
-object BlobId {
-  def of(string: String): Try[BlobId] = refineV[IdConstraint](string) match {
-      case scala.Right(value) => Success(BlobId(value))
-      case Left(e) => Failure(new IllegalArgumentException(e))
-    }
-  def of(messageId: MessageId): Try[BlobId] = of(messageId.serialize())
-  def of(messageId: BlobId, partId: PartId): Try[BlobId] = of(s"${messageId.value.value}_${partId.serialize}")
+public class MemoryIdentityChangesMethodTest implements IdentityChangesContract {
+    @RegisterExtension
+    static JamesServerExtension testExtension = new JamesServerBuilder<MemoryJamesConfiguration>(tmpDir ->
+        MemoryJamesConfiguration.builder()
+            .workingDirectory(tmpDir)
+            .configurationFromClasspath()
+            .usersRepository(DEFAULT)
+            .build())
+        .server(configuration -> MemoryJamesServerMain.createServer(configuration)
+            .overrideWith(new TestJMAPServerModule()))
+        .build();
 }
-
-case class BlobId(value: Id)
