@@ -105,6 +105,7 @@ class ReadLevelTest {
         CassandraRabbitMQJamesConfiguration.builder()
             .workingDirectory(tmpDir)
             .configurationFromClasspath()
+            .enableJMAP()
             .blobStore(BlobStoreConfiguration.builder()
                 .cassandra()
                 .disableCache()
@@ -142,10 +143,9 @@ class ReadLevelTest {
 
     @Test
     void gettingEmailMetadataShouldNotReadBlobs(GuiceJamesServer server) {
-        StatementRecorder statementRecorder = new StatementRecorder();
-        server.getProbe(TestingSessionProbe.class)
+        StatementRecorder statementRecorder = server.getProbe(TestingSessionProbe.class)
             .getTestingSession()
-            .recordStatements(statementRecorder);
+            .recordStatements();
 
         String request = "{" +
             "  \"using\": [\"urn:ietf:params:jmap:core\", \"urn:ietf:params:jmap:mail\"]," +
@@ -171,10 +171,9 @@ class ReadLevelTest {
 
     @Test
     void gettingEmailHeadersShouldReadBlobOnce(GuiceJamesServer server) {
-        StatementRecorder statementRecorder = new StatementRecorder();
-        server.getProbe(TestingSessionProbe.class)
+        StatementRecorder statementRecorder = server.getProbe(TestingSessionProbe.class)
             .getTestingSession()
-            .recordStatements(statementRecorder);
+            .recordStatements();
 
         String request = "{" +
             "  \"using\": [\"urn:ietf:params:jmap:core\", \"urn:ietf:params:jmap:mail\"]," +
@@ -202,10 +201,9 @@ class ReadLevelTest {
 
     @Test
     void gettingEmailFastViewShouldReadBlobOnce(GuiceJamesServer server) {
-        StatementRecorder statementRecorder = new StatementRecorder();
-        server.getProbe(TestingSessionProbe.class)
+        StatementRecorder statementRecorder = server.getProbe(TestingSessionProbe.class)
             .getTestingSession()
-            .recordStatements(statementRecorder);
+            .recordStatements();
 
         String request = "{" +
             "  \"using\": [\"urn:ietf:params:jmap:core\", \"urn:ietf:params:jmap:mail\"]," +
@@ -236,10 +234,9 @@ class ReadLevelTest {
     void gettingEmailFastViewShouldReadBlobTwiceUponCacheMisses(GuiceJamesServer server) {
         server.getProbe(JmapGuiceProbe.class).clearMessageFastViewProjection();
 
-        StatementRecorder statementRecorder = new StatementRecorder();
-        server.getProbe(TestingSessionProbe.class)
+        StatementRecorder statementRecorder = server.getProbe(TestingSessionProbe.class)
             .getTestingSession()
-            .recordStatements(statementRecorder);
+            .recordStatements();
 
         String request = "{" +
             "  \"using\": [\"urn:ietf:params:jmap:core\", \"urn:ietf:params:jmap:mail\"]," +
@@ -292,10 +289,9 @@ class ReadLevelTest {
             .then()
             .statusCode(SC_OK);
 
-        StatementRecorder statementRecorder = new StatementRecorder();
-        server.getProbe(TestingSessionProbe.class)
+        StatementRecorder statementRecorder = server.getProbe(TestingSessionProbe.class)
             .getTestingSession()
-            .recordStatements(statementRecorder);
+            .recordStatements();
         with()
             .header(HttpHeaderNames.ACCEPT.toString(), Fixture.ACCEPT_RFC8621_VERSION_HEADER())
             .body(request)
@@ -308,10 +304,9 @@ class ReadLevelTest {
 
     @Test
     void gettingEmailBodyShouldReadBlobTwice(GuiceJamesServer server) {
-        StatementRecorder statementRecorder = new StatementRecorder();
-        server.getProbe(TestingSessionProbe.class)
+        StatementRecorder statementRecorder = server.getProbe(TestingSessionProbe.class)
             .getTestingSession()
-            .recordStatements(statementRecorder);
+            .recordStatements();
 
         String request = "{" +
             "  \"using\": [\"urn:ietf:params:jmap:core\", \"urn:ietf:params:jmap:mail\"]," +
