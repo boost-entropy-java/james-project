@@ -178,6 +178,7 @@ Response codes:
    - [Get the list of aliases for a domain](#Get_the_list_of_aliases_for_a_domain)
    - [Create an alias for a domain](#Create_an_alias_for_a_domain)
    - [Delete an alias for a domain](#Delete_an_alias_for_a_domain)
+   - [Delete all users data of a domain](#delete-all-users-data-of-a-domain)
 
 ### Create a domain
 
@@ -302,6 +303,36 @@ Response codes:
  - 400: source, domain and destination domain are the same
  - 404: `source.domain.tld` are not part of handled domains.
 
+### Delete all users data of a domain
+
+```
+curl -XPOST http://ip:port/domains/{domainToBeUsed}?action=deleteData
+```
+
+Would create a task that deletes data of all users of the domain.
+
+[More details about endpoints returning a task](#_endpoints_returning_a_task).
+
+Response codes:
+
+* 201: Success. Corresponding task id is returned.
+* 400: Error in the request. Details can be found in the reported error.
+
+The scheduled task will have the following type `DeleteUsersDataOfDomainTask` and the following `additionalInformation`:
+
+```
+{
+        "type": "DeleteUsersDataOfDomainTask",
+        "domain": "domain.tld",
+        "successfulUsersCount": 2,
+        "failedUsersCount": 1,
+        "failedUsers": ["faileduser@domain.tld"],
+        "timestamp": "2023-05-22T08:52:47.076261Z"
+}
+```
+
+Notes: `failedUsers` only lists maximum 100 failed users.
+
 ## Administrating users
 
    - [Create a user](#Create_a_user)
@@ -310,6 +341,8 @@ Response codes:
    - [Deleting a user](#Deleting_a_user)
    - [Retrieving the user list](#Retrieving_the_user_list)
    - [Retrieving the list of allowed `From` headers for a given user](Retrieving_the_list_of_allowed_From_headers_for_a_given_user)
+   - [Change a username](#change-a-username)
+   - [Delete data of a user](#delete-data-of-a-user)
 
 ### Create a user
 
@@ -505,6 +538,57 @@ The scheduled task will have the following type `UsernameChangeTask` and the fol
         "type": "UsernameChangeTask",
         "oldUser": "jessy.jones@domain.tld",
         "newUser": "jessy.smith@domain.tld",
+        "status": {
+            "A": "DONE",
+            "B": "FAILED",
+            "C": "ABORTED"
+        },
+        "fromStep": null,
+        "timestamp": "2023-02-17T02:54:01.246477Z"
+}
+```
+
+Valid status includes:
+
+ - `SKIPPED`: bypassed via `fromStep` setting
+ - `WAITING`: Awaits execution
+ - `IN_PROGRESS`: Currently executed
+ - `FAILED`: Error encountered while executing this step. Check the logs.
+ - `ABORTED`: Won't be executed because of previous step failures.
+
+### Delete data of a user
+
+```
+curl -XPOST http://ip:port/users/usernameToBeUsed?action=deleteData
+```
+
+Would create a task that deletes data of the user.
+
+[More details about endpoints returning a task](#_endpoints_returning_a_task).
+
+Implemented deletion steps are:
+
+- `RecipientRewriteTableUserDeletionTaskStep`: deletes all rewriting rules related to this user.
+- `FilterUserDeletionTaskStep`: deletes all filters belonging to the user.
+- `DelegationUserDeletionTaskStep`: deletes all delegations from / to the user.
+- `MailboxUserDeletionTaskStep`: deletes mailboxes of this user, all ACLs of this user, as well as his subscriptions.
+- `WebPushUserDeletionTaskStep`: deletes push data registered for this user.
+- `IdentityUserDeletionTaskStep`: deletes identities registered for this user.
+- `VacationUserDeletionTaskStep`: deletes vacations registered for this user.
+
+Response codes:
+
+* 201: Success. Corresponding task id is returned.
+* 400: Error in the request. Details can be found in the reported error.
+
+The `fromStep` query parameter allows skipping previous steps, allowing to resume the user data deletion from a failed step.
+
+The scheduled task will have the following type `DeleteUserDataTask` and the following `additionalInformation`:
+
+```
+{
+        "type": "DeleteUserDataTask",
+        "username": "jessy.jones@domain.tld",
         "status": {
             "A": "DONE",
             "B": "FAILED",
