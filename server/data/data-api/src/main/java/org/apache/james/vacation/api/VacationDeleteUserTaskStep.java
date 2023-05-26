@@ -17,33 +17,43 @@
  * under the License.                                             *
  ******************************************************************/
 
-package org.apache.james.jmap.api.pushsubscription;
+package org.apache.james.vacation.api;
 
-import java.time.ZonedDateTime;
-import java.util.Set;
+import javax.inject.Inject;
 
 import org.apache.james.core.Username;
-import org.apache.james.jmap.api.model.PushSubscription;
-import org.apache.james.jmap.api.model.PushSubscriptionCreationRequest;
-import org.apache.james.jmap.api.model.PushSubscriptionExpiredTime;
-import org.apache.james.jmap.api.model.PushSubscriptionId;
-import org.apache.james.jmap.api.model.TypeName;
+import org.apache.james.user.api.DeleteUserDataTaskStep;
+import org.apache.james.util.ValuePatch;
 import org.reactivestreams.Publisher;
 
-public interface PushSubscriptionRepository {
-    Publisher<PushSubscription> save(Username username, PushSubscriptionCreationRequest pushSubscriptionCreationRequest);
+public class VacationDeleteUserTaskStep implements DeleteUserDataTaskStep {
+    private final VacationRepository vacationRepository;
 
-    Publisher<PushSubscriptionExpiredTime> updateExpireTime(Username username, PushSubscriptionId id, ZonedDateTime newExpire);
+    @Inject
+    public VacationDeleteUserTaskStep(VacationRepository vacationRepository) {
+        this.vacationRepository = vacationRepository;
+    }
 
-    Publisher<Void> updateTypes(Username username, PushSubscriptionId id, Set<TypeName> types);
+    @Override
+    public StepName name() {
+        return new StepName("VacationDeleteUserTaskStep");
+    }
 
-    Publisher<Void> validateVerificationCode(Username username, PushSubscriptionId id);
+    @Override
+    public int priority() {
+        return 4;
+    }
 
-    Publisher<Void> revoke(Username username, PushSubscriptionId id);
-
-    Publisher<Void> delete(Username username);
-
-    Publisher<PushSubscription> get(Username username, Set<PushSubscriptionId> ids);
-
-    Publisher<PushSubscription> list(Username username);
+    @Override
+    public Publisher<Void> deleteUserData(Username username) {
+        return vacationRepository.modifyVacation(AccountId.fromUsername(username),
+            VacationPatch.builder()
+                .isEnabled(false)
+                .subject(ValuePatch.remove())
+                .fromDate(ValuePatch.remove())
+                .htmlBody(ValuePatch.remove())
+                .textBody(ValuePatch.remove())
+                .toDate(ValuePatch.remove())
+                .build());
+    }
 }
