@@ -17,36 +17,22 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james;
+package org.apache.james.modules.server;
 
-import org.apache.james.modules.protocols.ImapGuiceProbe;
-import org.apache.james.modules.protocols.LmtpGuiceProbe;
-import org.apache.james.modules.protocols.Pop3GuiceProbe;
-import org.apache.james.modules.protocols.SmtpGuiceProbe;
+import org.apache.james.protocols.lib.netty.AbstractServerFactory;
+import org.apache.james.protocols.webadmin.ProtocolServerRoutes;
+import org.apache.james.webadmin.Routes;
 
-public interface JamesServerConcreteContract extends JamesServerContract {
+import com.google.inject.AbstractModule;
+import com.google.inject.multibindings.Multibinder;
+
+public class ServerRouteModule extends AbstractModule {
     @Override
-    default int imapPort(GuiceJamesServer server) {
-        return server.getProbe(ImapGuiceProbe.class).getImapPort();
-    }
+    protected void configure() {
+        Multibinder.newSetBinder(binder(), AbstractServerFactory.class);
 
-    @Override
-    default int imapsPort(GuiceJamesServer server) {
-        return server.getProbe(ImapGuiceProbe.class).getImapStartTLSPort();
-    }
-
-    @Override
-    default int smtpPort(GuiceJamesServer server) {
-        return server.getProbe(SmtpGuiceProbe.class).getSmtpPort().getValue();
-    }
-
-    @Override
-    default int lmtpPort(GuiceJamesServer server) {
-        return server.getProbe(LmtpGuiceProbe.class).getLmtpPort();
-    }
-
-    @Override
-    default int pop3Port(GuiceJamesServer server) {
-        return server.getProbe(Pop3GuiceProbe.class).getPop3Port();
+        Multibinder.newSetBinder(binder(), Routes.class)
+            .addBinding()
+            .to(ProtocolServerRoutes.class);
     }
 }

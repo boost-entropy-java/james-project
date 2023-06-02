@@ -61,7 +61,10 @@ import io.netty.util.concurrent.EventExecutorGroup;
 /**
  * Abstract base class for Servers for all James Servers
  */
-public abstract class AbstractConfigurableAsyncServer extends AbstractAsyncServer implements Configurable, ServerMBean {
+public abstract class AbstractConfigurableAsyncServer
+        extends AbstractAsyncServer
+        implements CertificateReloadable, Configurable, ServerMBean {
+
     private static final Logger LOGGER = LoggerFactory.getLogger(AbstractConfigurableAsyncServer.class);
 
     /** The default value for the connection backlog. */
@@ -360,6 +363,10 @@ public abstract class AbstractConfigurableAsyncServer extends AbstractAsyncServe
         }
     }
 
+    public void reloadSSLCertificate() throws Exception {
+        buildSSLContext();
+    }
+
     /**
      * Return the default port which will get used for this server if non is
      * specify in the configuration
@@ -456,7 +463,7 @@ public abstract class AbstractConfigurableAsyncServer extends AbstractAsyncServe
     protected AbstractChannelPipelineFactory createPipelineFactory() {
         return new AbstractSSLAwareChannelPipelineFactory<>(getTimeout(), connectionLimit, connPerIP,
             proxyRequired,
-            getEncryption(), getFrameHandlerFactory(), getExecutorGroup()) {
+            this::getEncryption, getFrameHandlerFactory(), getExecutorGroup()) {
 
             @Override
             protected ChannelInboundHandlerAdapter createHandler() {

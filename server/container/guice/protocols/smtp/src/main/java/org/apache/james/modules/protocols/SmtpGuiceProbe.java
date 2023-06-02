@@ -64,6 +64,10 @@ public class SmtpGuiceProbe implements GuiceProbe {
         return getPort(AbstractConfigurableAsyncServer::getStartTLSSupported);
     }
 
+    public Port getSmtpSslPort() {
+        return getPort(server -> server.getSocketType().equals("secure"));
+    }
+
     public Port getSmtpAuthRequiredPort() {
         return getPort(server -> ((SMTPServer) server).getAuthRequired().equals(FOR_UNAUTHORIZED_ADDRESSES));
     }

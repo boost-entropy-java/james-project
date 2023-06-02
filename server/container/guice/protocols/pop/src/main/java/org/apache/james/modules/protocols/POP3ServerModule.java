@@ -26,6 +26,7 @@ import org.apache.james.lifecycle.api.ConfigurationSanitizer;
 import org.apache.james.pop3server.mailbox.DefaultMailboxAdapterFactory;
 import org.apache.james.pop3server.mailbox.MailboxAdapterFactory;
 import org.apache.james.pop3server.netty.POP3ServerFactory;
+import org.apache.james.protocols.lib.netty.CertificateReloadable;
 import org.apache.james.server.core.configuration.ConfigurationProvider;
 import org.apache.james.utils.GuiceProbe;
 import org.apache.james.utils.InitializationOperation;
@@ -46,6 +47,8 @@ public class POP3ServerModule extends AbstractModule {
         bind(MailboxAdapterFactory.class).to(DefaultMailboxAdapterFactory.class);
 
         Multibinder.newSetBinder(binder(), GuiceProbe.class).addBinding().to(Pop3GuiceProbe.class);
+
+        Multibinder.newSetBinder(binder(), CertificateReloadable.Factory.class).addBinding().to(POP3ServerFactory.class);
     }
 
     @ProvidesIntoSet

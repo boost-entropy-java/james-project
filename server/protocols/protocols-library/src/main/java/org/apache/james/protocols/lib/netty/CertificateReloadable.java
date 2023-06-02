@@ -16,37 +16,16 @@
  * specific language governing permissions and limitations      *
  * under the License.                                           *
  ****************************************************************/
+package org.apache.james.protocols.lib.netty;
 
-package org.apache.james;
+import java.util.stream.Stream;
 
-import org.apache.james.modules.protocols.ImapGuiceProbe;
-import org.apache.james.modules.protocols.LmtpGuiceProbe;
-import org.apache.james.modules.protocols.Pop3GuiceProbe;
-import org.apache.james.modules.protocols.SmtpGuiceProbe;
-
-public interface JamesServerConcreteContract extends JamesServerContract {
-    @Override
-    default int imapPort(GuiceJamesServer server) {
-        return server.getProbe(ImapGuiceProbe.class).getImapPort();
+public interface CertificateReloadable {
+    interface Factory {
+        Stream<? extends CertificateReloadable> certificatesReloadable();
     }
 
-    @Override
-    default int imapsPort(GuiceJamesServer server) {
-        return server.getProbe(ImapGuiceProbe.class).getImapStartTLSPort();
-    }
+    void reloadSSLCertificate() throws Exception;
 
-    @Override
-    default int smtpPort(GuiceJamesServer server) {
-        return server.getProbe(SmtpGuiceProbe.class).getSmtpPort().getValue();
-    }
-
-    @Override
-    default int lmtpPort(GuiceJamesServer server) {
-        return server.getProbe(LmtpGuiceProbe.class).getLmtpPort();
-    }
-
-    @Override
-    default int pop3Port(GuiceJamesServer server) {
-        return server.getProbe(Pop3GuiceProbe.class).getPop3Port();
-    }
+    int getPort();
 }
