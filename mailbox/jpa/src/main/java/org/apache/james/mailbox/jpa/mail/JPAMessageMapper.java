@@ -49,8 +49,6 @@ import org.apache.james.mailbox.model.MessageRange.Type;
 import org.apache.james.mailbox.model.UpdatedFlags;
 import org.apache.james.mailbox.store.FlagsUpdateCalculator;
 import org.apache.james.mailbox.store.mail.MessageMapper;
-import org.apache.james.mailbox.store.mail.ModSeqProvider;
-import org.apache.james.mailbox.store.mail.UidProvider;
 import org.apache.james.mailbox.store.mail.model.MailboxMessage;
 import org.apache.james.mailbox.store.mail.utils.ApplicableFlagCalculator;
 import org.apache.openjpa.persistence.ArgumentException;
@@ -59,6 +57,8 @@ import com.github.fge.lambdas.Throwing;
 import com.google.common.collect.ImmutableList;
 
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 /**
  * JPA implementation of a {@link MessageMapper}. This class is not thread-safe!
@@ -68,10 +68,10 @@ public class JPAMessageMapper extends JPATransactionalMapper implements MessageM
     private static final int UNLIMITED = -1;
 
     private final MessageUtils messageMetadataMapper;
-    private final UidProvider uidProvider;
-    private final ModSeqProvider modSeqProvider;
+    private final JPAUidProvider uidProvider;
+    private final JPAModSeqProvider modSeqProvider;
 
-    public JPAMessageMapper(UidProvider uidProvider, ModSeqProvider modSeqProvider, EntityManagerFactory entityManagerFactory) {
+    public JPAMessageMapper(JPAUidProvider uidProvider, JPAModSeqProvider modSeqProvider, EntityManagerFactory entityManagerFactory) {
         super(entityManagerFactory);
         this.messageMetadataMapper = new MessageUtils(uidProvider, modSeqProvider);
         this.uidProvider = uidProvider;
@@ -89,8 +89,17 @@ public class JPAMessageMapper extends JPATransactionalMapper implements MessageM
 
     @Override
     public Flux<MessageUid> listAllMessageUids(Mailbox mailbox) {
-        return findInMailboxReactive(mailbox, MessageRange.all(), FetchType.METADATA, UNLIMITED)
-            .map(MailboxMessage::getUid);
+        return Mono.fromCallable(() -> {
+            try {
+                JPAId mailboxId = (JPAId) mailbox.getMailboxId();
+                Query query = getEntityManager().createNamedQuery("listUidsInMailbox")
+                    .setParameter("idParam", mailboxId.getRawId());
+                return query.getResultStream().map(result -> MessageUid.of((Long) result));
+            } catch (PersistenceException e) {
+                throw new MailboxException("Search of recent messages failed in mailbox " + mailbox, e);
+            }
+        }).flatMapMany(Flux::fromStream)
+            .subscribeOn(Schedulers.boundedElastic());
     }
 
     @Override
@@ -208,6 +217,8 @@ public class JPAMessageMapper extends JPATransactionalMapper implements MessageM
         }
     }
 
+
+
     @Override
     public List<MessageUid> retrieveMessagesMarkedForDeletion(Mailbox mailbox, MessageRange messageRange) throws MailboxException {
         try {
@@ -313,12 +324,12 @@ public class JPAMessageMapper extends JPATransactionalMapper implements MessageM
 
     @Override
     public Optional<MessageUid> getLastUid(Mailbox mailbox) throws MailboxException {
-        return uidProvider.lastUid(mailbox);
+        return uidProvider.lastUid(mailbox, getEntityManager());
     }
 
     @Override
     public ModSeq getHighestModSeq(Mailbox mailbox) throws MailboxException {
-        return modSeqProvider.highestModSeq(mailbox);
+        return modSeqProvider.highestModSeq(mailbox.getMailboxId(), getEntityManager());
     }
 
     @Override
@@ -343,9 +354,6 @@ public class JPAMessageMapper extends JPATransactionalMapper implements MessageM
         return save(mailbox, copy);
     }
 
-    /**
-     * @see org.apache.james.mailbox.store.mail.AbstractMessageMapper#save(Mailbox, MailboxMessage)
-     */
     protected MessageMetaData save(Mailbox mailbox, MailboxMessage message) throws MailboxException {
         try {
             // We need to reload a "JPA attached" mailbox, because the provide
