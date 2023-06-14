@@ -182,6 +182,21 @@ class SieveIntegrationTest {
         assertThatAttribute(mail.getAttribute(ATTRIBUTE_NAME)).isEqualTo(ATTRIBUTE_INBOX_ANY);
     }
 
+
+    // ANCHOR
+    @Test
+    void shouldSupportSeveralRecipientsWhenFileInto() throws Exception {
+        prepareTestUsingScript("org/apache/james/transport/mailets/delivery/fileinto.script");
+        when(usersRepository.getUsername(new MailAddress("other@domain.tld"))).thenReturn(Username.of("other@domain.tld"));
+        when(resourceLocator.get(new MailAddress("other@domain.tld"))).thenThrow(new ScriptNotFoundException());
+
+        FakeMail mail = createMail();
+        mail.setRecipients(ImmutableList.of(new MailAddress(RECEIVER_DOMAIN_COM), new MailAddress("other@domain.tld")));
+        testee.service(mail);
+
+        assertThatAttribute(mail.getAttribute(ATTRIBUTE_NAME)).isEqualTo(ATTRIBUTE_INBOX_ANY);
+    }
+
     @Test
     void allOfAllFalseScriptShouldWork() throws Exception {
         prepareTestUsingScript("org/apache/james/transport/mailets/delivery/allofAllFalse.script");
@@ -465,6 +480,61 @@ class SieveIntegrationTest {
         testee.service(mail);
 
         assertThat(mail.getRecipients()).isEmpty();
+        FakeMailContext.SentMail expectedSentMail = FakeMailContext.sentMailBuilder()
+            .sender("sender@any.com")
+            .recipient(new MailAddress("redirect@apache.org"))
+            .fromMailet()
+            .build();
+        assertThat(fakeMailContext.getSentMails())
+            .containsExactly(expectedSentMail);
+    }
+
+    @Test
+    void rejectShouldWork() throws Exception {
+        prepareTestUsingScript("org/apache/james/transport/mailets/delivery/reject.script");
+
+        FakeMail mail = createMail();
+        testee.service(mail);
+
+        FakeMailContext.SentMail expectedSentMail = FakeMailContext.sentMailBuilder()
+            .recipient("sender@any.com")
+            .fromMailet()
+            .build();
+        assertThat(fakeMailContext.getSentMails())
+            .containsExactly(expectedSentMail);
+        assertThat(mail.getRecipients()).isEmpty();
+    }
+
+    @Test
+    void rejectShouldWorkWhenMultipleRecipients() throws Exception {
+        prepareTestUsingScript("org/apache/james/transport/mailets/delivery/reject.script");
+        when(usersRepository.getUsername(new MailAddress("other@domain.tld"))).thenReturn(Username.of("other@domain.tld"));
+        when(resourceLocator.get(new MailAddress("other@domain.tld"))).thenThrow(new ScriptNotFoundException());
+
+        FakeMail mail = createMail();
+        mail.setRecipients(ImmutableList.of(new MailAddress(RECEIVER_DOMAIN_COM), new MailAddress("other@domain.tld")));
+        testee.service(mail);
+
+        FakeMailContext.SentMail expectedSentMail = FakeMailContext.sentMailBuilder()
+            .recipient("sender@any.com")
+            .fromMailet()
+            .build();
+        assertThat(fakeMailContext.getSentMails())
+            .containsExactly(expectedSentMail);
+        assertThat(mail.getRecipients()).containsOnly(new MailAddress("other@domain.tld"));
+    }
+
+    @Test
+    void redirectShouldWorkWhenSeveralRecipients() throws Exception {
+        prepareTestUsingScript("org/apache/james/transport/mailets/delivery/redirect.script");
+        when(usersRepository.getUsername(new MailAddress("other@domain.tld"))).thenReturn(Username.of("other@domain.tld"));
+        when(resourceLocator.get(new MailAddress("other@domain.tld"))).thenThrow(new ScriptNotFoundException());
+
+        FakeMail mail = createMail();
+        mail.setRecipients(ImmutableList.of(new MailAddress(RECEIVER_DOMAIN_COM), new MailAddress("other@domain.tld")));
+        testee.service(mail);
+
+        assertThat(mail.getRecipients()).containsOnly(new MailAddress("other@domain.tld"));
         FakeMailContext.SentMail expectedSentMail = FakeMailContext.sentMailBuilder()
             .sender("sender@any.com")
             .recipient(new MailAddress("redirect@apache.org"))
@@ -847,6 +917,26 @@ class SieveIntegrationTest {
         prepareTestUsingScript("org/apache/james/transport/mailets/delivery/vacationReason.script");
 
         FakeMail mail = createMail();
+        testee.service(mail);
+
+        assertThatAttribute(mail.getAttribute(ATTRIBUTE_NAME)).isEqualTo(ATTRIBUTE_INBOX);
+
+        FakeMailContext.SentMail expectedSentMail = FakeMailContext.sentMailBuilder()
+            .sender(new MailAddress(RECEIVER_DOMAIN_COM))
+            .recipient(new MailAddress("sender@any.com"))
+            .fromMailet()
+            .build();
+        assertThat(fakeMailContext.getSentMails()).containsExactly(expectedSentMail);
+    }
+
+    @Test
+    void vacationShouldWorkWhenSeveralRecipients() throws Exception {
+        prepareTestUsingScript("org/apache/james/transport/mailets/delivery/vacationReason.script");
+        when(usersRepository.getUsername(new MailAddress("other@domain.tld"))).thenReturn(Username.of("other@domain.tld"));
+        when(resourceLocator.get(new MailAddress("other@domain.tld"))).thenThrow(new ScriptNotFoundException());
+
+        FakeMail mail = createMail();
+        mail.setRecipients(ImmutableList.of(new MailAddress(RECEIVER_DOMAIN_COM), new MailAddress("other@domain.tld")));
         testee.service(mail);
 
         assertThatAttribute(mail.getAttribute(ATTRIBUTE_NAME)).isEqualTo(ATTRIBUTE_INBOX);

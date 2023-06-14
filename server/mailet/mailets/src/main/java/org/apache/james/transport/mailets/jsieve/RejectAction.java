@@ -62,8 +62,8 @@ public class RejectAction implements MailAction {
         if (action instanceof ActionReject) {
             final ActionReject actionReject = (ActionReject) action;
             execute(actionReject, mail, context);
+            DiscardAction.removeRecipient(mail, context);
         }
-
     }
 
     /**
@@ -81,7 +81,7 @@ public class RejectAction implements MailAction {
      * @throws MessagingException
      */
     public void execute(ActionReject anAction, Mail aMail, ActionContext context) throws MessagingException {
-        ActionUtils.detectAndHandleLocalLooping(aMail, "reject");
+        ActionUtils.detectAndHandleLocalLooping(aMail, context, "reject");
 
         // Create the MDN part
         StringBuilder humanText = new StringBuilder(128);
@@ -109,8 +109,7 @@ public class RejectAction implements MailAction {
             originalRecipient = originalRecipients[0];
         }
 
-        MailAddress soleRecipient = ActionUtils.getSoleRecipient(aMail);
-        String finalRecipient = soleRecipient.asString();
+        String finalRecipient = context.getRecipient().asString();
         String originalMessageId = aMail.getMessage().getMessageID();
 
         Multipart multipart = MDN.builder()
@@ -133,7 +132,7 @@ public class RejectAction implements MailAction {
 
         // Send the message
         MimeMessage reply = (MimeMessage) aMail.getMessage().reply(false);
-        soleRecipient.toInternetAddress()
+        context.getRecipient().toInternetAddress()
             .ifPresent(Throwing.<Address>consumer(reply::setFrom).sneakyThrow());
         reply.setContent(multipart);
         reply.saveChanges();
