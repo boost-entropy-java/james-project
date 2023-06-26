@@ -17,29 +17,19 @@
  * under the License.                                           *
  ****************************************************************/
 
+package org.apache.james.jmap.rfc8621
 
+import cats.implicits.toFunctorOps
+import sttp.client3.Identity
+import sttp.ws.WebSocketFrame
+import sttp.ws.WebSocketFrame.Text
 
-package org.apache.james.transport.matchers;
+package object contract {
 
-import java.util.Collection;
-import java.util.Collections;
-
-import org.apache.james.core.MailAddress;
-import org.apache.mailet.Mail;
-import org.apache.mailet.base.GenericMatcher;
-
-/**
- * Matches mail where the number of recipients is exactly one.
- * @version 1.0.0, 04/12/2000
- */
-public class IsSingleRecipient extends GenericMatcher {
-
-    @Override
-    public Collection<MailAddress> match(Mail mail) {
-        if (mail.getRecipients().size() == 1) {
-            return mail.getRecipients();
-        } else {
-            return Collections.emptyList();
-        }
+  implicit class asPayload(val webSocketFrame: Identity[WebSocketFrame]) {
+    def asPayload: Identity[String] = webSocketFrame.map {
+      case t: Text => t.payload
+      case _ => throw new RuntimeException("Not a text frame")
     }
+  }
 }

@@ -3063,7 +3063,7 @@
                             <arg>-unchecked</arg>
                             <arg>-deprecation</arg>
                             <arg>-explaintypes</arg>
-                            <arg>-Ywarn-unused</arg>
+                            <arg>-Wconf:msg=Auto-application to \`\(\)\` is deprecated:s</arg>
                         </args>
                         <jvmArgs>
                             <jvmArg>-Xss128m</jvmArg>
