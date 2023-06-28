@@ -17,40 +17,32 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.queue.rabbitmq.view.api;
+package org.apache.james.imap;
 
-import java.time.Instant;
+import org.apache.james.imap.api.process.ImapProcessor;
+import org.apache.james.imap.decode.ImapDecoder;
+import org.apache.james.imap.encode.ImapEncoder;
 
-import org.apache.james.queue.api.ManageableMailQueue;
-import org.apache.james.queue.rabbitmq.EnqueueId;
-import org.apache.james.queue.rabbitmq.EnqueuedItem;
-import org.apache.james.queue.rabbitmq.MailQueueName;
-import org.reactivestreams.Publisher;
+public class ImapSuite {
+    private final ImapDecoder decoder;
+    private final ImapEncoder encoder;
+    private final ImapProcessor processor;
 
-import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
-
-public interface MailQueueView<V extends ManageableMailQueue.MailQueueItemView> {
-
-    interface Factory {
-        MailQueueView create(MailQueueName mailQueueName);
+    public ImapSuite(ImapDecoder decoder, ImapEncoder encoder, ImapProcessor processor) {
+        this.decoder = decoder;
+        this.encoder = encoder;
+        this.processor = processor;
     }
 
-    void initialize(MailQueueName mailQueueName);
+    public ImapDecoder getDecoder() {
+        return decoder;
+    }
 
-    Mono<Void> storeMail(EnqueuedItem enqueuedItem);
+    public ImapEncoder getEncoder() {
+        return encoder;
+    }
 
-    Publisher<Long> delete(DeleteCondition deleteCondition);
-
-    Mono<Boolean> isPresent(EnqueueId id);
-
-    ManageableMailQueue.MailQueueIterator browse();
-
-    Flux<V> browseReactive();
-
-    Flux<V> browseOlderThanReactive(Instant olderThan);
-
-    long getSize();
-
-    Mono<Long> getSizeReactive();
+    public ImapProcessor getProcessor() {
+        return processor;
+    }
 }
