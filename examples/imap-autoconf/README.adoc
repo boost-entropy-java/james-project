@@ -84,3 +84,61 @@ docker exec -ti james james-cli Adduser bob@domain.tld 123456
  - 4. Start Thunderbird and enjoy auto-configuration!
 
 image:thunderbird_autoconf.png[Auto-configuration was applied in Thunderbird]
+
+== Outlook
+
+In case you have your IMAP server at `imap.domain.tld` and your SMTP server at `smtp.domain.tld`, for Outlook auto-configuration to work,
+you would need to set up a DNS record (e.g. CNAME or A record) for the subdomain `autodiscover.domain.tld`.
+
+In case your IMAP/SMTP server address does not follow the above address convention, you may need to serve a `autodiscover.xml` XML file at
+`autodiscover.domain.tld/autodiscover/autodiscover.xml`. Example `autodiscover.xml` file:
+
+```xml
+<Autodiscover xmlns="http://schemas.microsoft.com/exchange/autodiscover/responseschema/2006">
+    <Response xmlns="http://schemas.microsoft.com/exchange/autodiscover/outlook/responseschema/2006a">
+        <Account>
+            <AccountType>email</AccountType>
+            <Action>settings</Action>
+            <Protocol>
+                <Type>IMAP</Type>
+                <Server>imap.server.domain.tld</Server>
+                <Port>993</Port>
+                <DomainRequired>off</DomainRequired>
+                <LoginName/>
+                <SPA>off</SPA>
+                <SSL>on</SSL>
+                <AuthRequired>on</AuthRequired>
+            </Protocol>
+            <Protocol>
+                <Type>SMTP</Type>
+                <Server>smtp.server.domain.tld</Server>
+                <Port>465</Port>
+                <DomainRequired>off</DomainRequired>
+                <LoginName/>
+                <SPA>off</SPA>
+                <Encryption>SSL</Encryption>
+                <AuthRequired>on</AuthRequired>
+                <UsePOPAuth>off</UsePOPAuth>
+                <SMTPLast>off</SMTPLast>
+            </Protocol>
+        </Account>
+    </Response>
+</Autodiscover>
+```
+
+Please note that Outlook asks a Microsoft remote service for auto configuration discovery, therefore you should not be
+able to set up an local IMAP server to test the Outlook configuration.
+
+=== Demo Outlook auto configuration
+
+- 1. Enter your email address:
+
+image:outlook_enterMailAddress.jpg[Enter your email address in Outlook]
+
+- 2. Enter your password:
+
+image:outlook_enterPassword.jpg[Enter your password in Outlook]
+
+- 3. Enjoy Outlook auto configuration!
+
+image:outlook_enjoyAutoConfig.jpg[Enter your password in Outlook]
