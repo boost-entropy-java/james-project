@@ -23,7 +23,6 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 import javax.mail.MessagingException;
 
@@ -61,7 +60,7 @@ public class SPFTest {
     @BeforeAll
     public static void setupMockedSPFDNSService() throws TimeoutException {
         mockedSPFDNSService = mock(org.apache.james.jspf.core.DNSService.class);
-        when(mockedSPFDNSService.getRecordsAsync(any(DNSRequest.class)))
+        when(mockedSPFDNSService.getRecords(any(DNSRequest.class)))
             .thenAnswer(invocation -> {
                 DNSRequest req = invocation.getArgument(0);
                 switch (req.getRecordType()) {
@@ -70,26 +69,26 @@ public class SPFTest {
                         List<String> l = new ArrayList<>();
                         switch (req.getHostname()) {
                             case "some.host.local":
-                                return CompletableFuture.completedFuture(l);
+                                return l;
                             case "spf1.james.apache.org":
                                 // pass
                                 l.add("v=spf1 +all");
-                                return CompletableFuture.completedFuture(l);
+                                return l;
                             case "spf2.james.apache.org":
                                 // fail
                                 l.add("v=spf1 -all");
-                                return CompletableFuture.completedFuture(l);
+                                return l;
                             case "spf3.james.apache.org":
                                 // softfail
                                 l.add("v=spf1 ~all");
-                                return CompletableFuture.completedFuture(l);
+                                return l;
                             case "spf4.james.apache.org":
                                 // permerror
                                 l.add("v=spf1 badcontent!");
-                                return CompletableFuture.completedFuture(l);
+                                return l;
                             case "spf5.james.apache.org":
                                 // temperror
-                                return CompletableFuture.failedFuture(new TimeoutException("TIMEOUT"));
+                                 throw new TimeoutException("TIMEOUT");
                             default:
                                 throw new RuntimeException("Unknown record " + req.getHostname());
                         }
@@ -105,7 +104,7 @@ public class SPFTest {
         Mailet mailet = testMailet(false, false, "10.0.0.0/8");
 
         mailet.service(mail);
-        assertThat(mail.getAttribute(RESULT_ATTRIBUTE).isEmpty()).isTrue();
+        assertThat(mail.getAttribute(RESULT_ATTRIBUTE)).isEmpty();
     }
 
     @Test
@@ -114,8 +113,7 @@ public class SPFTest {
         Mailet mailet = testMailet();
 
         mailet.service(mail);
-        assertThat(AttributeUtils.getValueAndCastFromMail(mail, RESULT_ATTRIBUTE, String.class)
-            .orElse(null)).isEqualTo("none");
+        assertThat(AttributeUtils.getValueAndCastFromMail(mail, RESULT_ATTRIBUTE, String.class)).contains("none");
     }
 
     @Test
@@ -124,8 +122,7 @@ public class SPFTest {
         Mailet mailet = testMailet();
 
         mailet.service(mail);
-        assertThat(AttributeUtils.getValueAndCastFromMail(mail, RESULT_ATTRIBUTE, String.class)
-            .orElse(null)).isEqualTo("pass");
+        assertThat(AttributeUtils.getValueAndCastFromMail(mail, RESULT_ATTRIBUTE, String.class)).contains("pass");
     }
 
     @Test
@@ -134,8 +131,7 @@ public class SPFTest {
         Mailet mailet = testMailet();
 
         mailet.service(mail);
-        assertThat(AttributeUtils.getValueAndCastFromMail(mail, RESULT_ATTRIBUTE, String.class)
-            .orElse(null)).isEqualTo("fail");
+        assertThat(AttributeUtils.getValueAndCastFromMail(mail, RESULT_ATTRIBUTE, String.class)).contains("fail");
     }
 
     @Test
@@ -144,8 +140,7 @@ public class SPFTest {
         Mailet mailet = testMailet();
 
         mailet.service(mail);
-        assertThat(AttributeUtils.getValueAndCastFromMail(mail, RESULT_ATTRIBUTE, String.class)
-            .orElse(null)).isEqualTo("softfail");
+        assertThat(AttributeUtils.getValueAndCastFromMail(mail, RESULT_ATTRIBUTE, String.class)).contains("softfail");
     }
 
     @Test
@@ -154,8 +149,7 @@ public class SPFTest {
         Mailet mailet = testMailet();
 
         mailet.service(mail);
-        assertThat(AttributeUtils.getValueAndCastFromMail(mail, RESULT_ATTRIBUTE, String.class)
-            .orElse(null)).isEqualTo("permerror");
+        assertThat(AttributeUtils.getValueAndCastFromMail(mail, RESULT_ATTRIBUTE, String.class)).contains("permerror");
     }
 
     @Test
@@ -164,8 +158,7 @@ public class SPFTest {
         Mailet mailet = testMailet();
 
         mailet.service(mail);
-        assertThat(AttributeUtils.getValueAndCastFromMail(mail, RESULT_ATTRIBUTE, String.class)
-            .orElse(null)).isEqualTo("temperror");
+        assertThat(AttributeUtils.getValueAndCastFromMail(mail, RESULT_ATTRIBUTE, String.class)).contains("temperror");
     }
 
     private Mailet testMailet() throws MessagingException {
