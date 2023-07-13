@@ -36,11 +36,10 @@ Change list:
 - [Migration to OpenSearch](#migration-to-opensearch)
 - [Deleted message vault is now deactivated by default](#deleted-message-vault-is-now-deactivated-by-default)
 - [SortOrder addition in Identity](#sortorder-addition-in-identity)
-- [TLS host name verification is now enabled by default](#tls-host-name-verification-is-now-enabled-by-default)
 - [Blob Store AES upgraded to PBKDF2WithHmacSHA512](#blob-store-aes-upgraded-to-pbkdf2withhmacsha512)
 - [Adding saveDate column to messageIdTable and imapUidTable](#adding-savedate-column-to-messageidtable-and-imapuidtable)
 - [Adding the saveDate to the OpenSearch index](#adding-the-savedate-to-the-opensearch-index)
-- [Adding delegatedUser column to user_table](#adding-delegatedusers-column-to-user-table)
+- [Adding delegatedUser column to user_table](#adding-delegated_users-column-to-user-table)
 - [DeletedMessageVaultHook should not be used on Cassandra based products](#deleted-message-vault-is-now-deactivated-by-default)
 
 ### JMAP filters event sourcing increments and snapshots
@@ -147,22 +146,6 @@ encryption.aes.private.key.algorithm=PBKDF2WithHmacSHA1
 ```
 
 We do not have a migration strategy for PBKDF2WithHmacSHA1 users to migrate to PBKDF2WithHmacSHA512.
-
-### TLS host name verification is now enabled by default
-
-Date: 06/10/2022
-
-JIRA: JAMES-3833
-
-When establishing an SMTPS or StartTLS connection during remote mail delivery, James will now check the remote server's host/domain name against its certificate (RFC 2595). If they do not match, the connection fails as a temporary delivery error.
-
-This prevents attackers from spoofing legitimate servers and intercepting mails. However, it may prevent James from connecting to servers that have strange certificates, no DNS entries, are reachable by IP address only, and similar edge cases.
-
-Users requiring such connectivity may disable this check within `mailetcontainer.xml` at the RemoteDelivery mailet configuration:
-
-```
-<verifyServerIdentity>false</verifyServerIdentity>
-```
 
 ### SortOrder addition in Identity
 
@@ -272,7 +255,27 @@ No specific operation to conduct from a 3.7.3 version.
 
 ## 3.7.3 version
 
-No specific operation to conduct from a 3.7.2 version.
+Changes to apply between 3.7.2 and 3.7.3 are reported here.
+
+Change list:
+
+- [TLS host name verification is now enabled by default](#tls-host-name-verification-is-now-enabled-by-default)
+
+### TLS host name verification is now enabled by default
+
+Date: 06/10/2022
+
+JIRA: JAMES-3833
+
+When establishing an SMTPS or StartTLS connection during remote mail delivery, James will now check the remote server's host/domain name against its certificate (RFC 2595). If they do not match, the connection fails as a temporary delivery error.
+
+This prevents attackers from spoofing legitimate servers and intercepting mails. However, it may prevent James from connecting to servers that have strange certificates, no DNS entries, are reachable by IP address only, and similar edge cases.
+
+Users requiring such connectivity may disable this check within `mailetcontainer.xml` at the RemoteDelivery mailet configuration:
+
+```
+<verifyServerIdentity>false</verifyServerIdentity>
+```
 
 ## 3.7.2 version
 
