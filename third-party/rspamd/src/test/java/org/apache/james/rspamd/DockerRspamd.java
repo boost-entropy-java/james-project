@@ -19,6 +19,7 @@
 
 package org.apache.james.rspamd;
 
+import java.time.Duration;
 import java.util.UUID;
 import java.util.stream.Stream;
 
@@ -62,7 +63,8 @@ public class DockerRspamd {
             .withCopyFileToContainer(MountableFile.forClasspathResource("rspamd-config/statistic.conf"), "/etc/rspamd/")
             .withCreateContainerCmdModifier(createContainerCmd -> createContainerCmd.withName("james-rspamd-test-" + UUID.randomUUID()))
             .withNetwork(network)
-            .waitingFor(Wait.forHealthcheck());
+            .waitingFor(Wait.forHealthcheck()
+                .withStartupTimeout(Duration.ofMinutes(2)));
     }
 
     public Integer getPort() {
@@ -77,6 +79,21 @@ public class DockerRspamd {
         if (!container.isRunning()) {
             container.start();
         }
+    }
+
+    public void pause() {
+        container.getDockerClient().pauseContainerCmd(container.getContainerId()).exec();
+    }
+
+    public void unPause() {
+        container.getDockerClient().unpauseContainerCmd(container.getContainerId()).exec();
+    }
+
+    public boolean isPaused() {
+        return container.getDockerClient().inspectContainerCmd(container.getContainerId())
+            .exec()
+            .getState()
+            .getPaused();
     }
 
     public void flushAll() {
