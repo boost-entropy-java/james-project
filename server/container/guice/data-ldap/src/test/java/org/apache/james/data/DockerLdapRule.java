@@ -19,6 +19,10 @@
 
 package org.apache.james.data;
 
+import java.net.URI;
+import java.util.List;
+import java.util.stream.Collectors;
+
 import org.apache.commons.configuration2.ex.ConfigurationException;
 import org.apache.james.GuiceModuleTestRule;
 import org.apache.james.user.ldap.DockerLdapSingleton;
@@ -26,6 +30,7 @@ import org.apache.james.user.ldap.LdapRepositoryConfiguration;
 import org.junit.runner.Description;
 import org.junit.runners.model.Statement;
 
+import com.github.fge.lambdas.Throwing;
 import com.google.inject.Module;
 
 public class DockerLdapRule implements GuiceModuleTestRule {
@@ -33,7 +38,7 @@ public class DockerLdapRule implements GuiceModuleTestRule {
     @Override
     public Module getModule() {
         return binder -> binder.bind(LdapRepositoryConfiguration.class)
-            .toInstance(computeConfiguration(DockerLdapSingleton.ldapContainer.getLdapHost()));
+            .toInstance(computeConfiguration(List.of(DockerLdapSingleton.ldapContainer.getLdapHost())));
     }
 
     @Override
@@ -41,10 +46,13 @@ public class DockerLdapRule implements GuiceModuleTestRule {
         return statement;
     }
 
-    private LdapRepositoryConfiguration computeConfiguration(String ldapIp) {
+    private LdapRepositoryConfiguration computeConfiguration(List<String> ldapIps) {
+        List<URI> uris = ldapIps.stream()
+            .map(Throwing.function(URI::new))
+            .collect(Collectors.toUnmodifiableList());
         try {
             return LdapRepositoryConfiguration.builder()
-                .ldapHost(ldapIp)
+                .ldapHosts(uris)
                 .principal("cn=admin,dc=james,dc=org")
                 .credentials("mysecretpassword")
                 .userBase("ou=People,dc=james,dc=org")

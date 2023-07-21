@@ -53,13 +53,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.github.fge.lambdas.Throwing;
+import com.github.fge.lambdas.functions.ThrowingFunction;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.unboundid.ldap.sdk.Attribute;
+import com.unboundid.ldap.sdk.BindRequest;
 import com.unboundid.ldap.sdk.DN;
 import com.unboundid.ldap.sdk.Entry;
+import com.unboundid.ldap.sdk.FailoverServerSet;
 import com.unboundid.ldap.sdk.Filter;
-import com.unboundid.ldap.sdk.LDAPConnection;
 import com.unboundid.ldap.sdk.LDAPConnectionOptions;
 import com.unboundid.ldap.sdk.LDAPConnectionPool;
 import com.unboundid.ldap.sdk.LDAPException;
@@ -68,6 +71,9 @@ import com.unboundid.ldap.sdk.SearchRequest;
 import com.unboundid.ldap.sdk.SearchResult;
 import com.unboundid.ldap.sdk.SearchResultEntry;
 import com.unboundid.ldap.sdk.SearchScope;
+import com.unboundid.ldap.sdk.ServerSet;
+import com.unboundid.ldap.sdk.SimpleBindRequest;
+import com.unboundid.ldap.sdk.SingleServerSet;
 
 public class ReadOnlyLDAPUsersDAO implements UsersDAO, Configurable {
     private static final Logger LOGGER = LoggerFactory.getLogger(ReadOnlyLDAPUsersDAO.class);
@@ -127,7 +133,7 @@ public class ReadOnlyLDAPUsersDAO implements UsersDAO, Configurable {
     public void init() throws Exception {
 
         if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug(this.getClass().getName() + ".init()" + '\n' + "LDAP host: " + ldapConfiguration.getLdapHost()
+            LOGGER.debug(this.getClass().getName() + ".init()" + '\n' + "LDAP hosts: " + ldapConfiguration.getLdapHosts()
                 + '\n' + "User baseDN: " + ldapConfiguration.getUserBase() + '\n' + "userIdAttribute: "
                 + ldapConfiguration.getUserIdAttribute() + '\n' + "Group restriction: " + ldapConfiguration.getRestriction()
                 + '\n' + "connectionTimeout: "
@@ -138,10 +144,15 @@ public class ReadOnlyLDAPUsersDAO implements UsersDAO, Configurable {
         connectionOptions.setConnectTimeoutMillis(ldapConfiguration.getConnectionTimeout());
         connectionOptions.setResponseTimeoutMillis(ldapConfiguration.getReadTimeout());
 
-        URI uri = new URI(ldapConfiguration.getLdapHost());
-        SocketFactory socketFactory = supportLDAPS(uri);
-        LDAPConnection ldapConnection = new LDAPConnection(socketFactory, connectionOptions, uri.getHost(), uri.getPort(), ldapConfiguration.getPrincipal(), ldapConfiguration.getCredentials());
-        ldapConnectionPool = new LDAPConnectionPool(ldapConnection, 4);
+        BindRequest bindRequest = new SimpleBindRequest(ldapConfiguration.getPrincipal(), ldapConfiguration.getCredentials());
+
+        List<ServerSet> serverSets = ldapConfiguration.getLdapHosts()
+            .stream()
+            .map(toSingleServerSet(connectionOptions, bindRequest))
+            .collect(ImmutableList.toImmutableList());
+
+        FailoverServerSet failoverServerSet = new FailoverServerSet(serverSets);
+        ldapConnectionPool = new LDAPConnectionPool(failoverServerSet, bindRequest, 4);
         ldapConnectionPool.setRetryFailedOperationsDueToInvalidConnections(true);
 
         userExtraFilter = Optional.ofNullable(ldapConfiguration.getFilter())
@@ -166,6 +177,10 @@ public class ReadOnlyLDAPUsersDAO implements UsersDAO, Configurable {
         } else {
             return null;
         }
+    }
+
+    private ThrowingFunction<URI, SingleServerSet> toSingleServerSet(LDAPConnectionOptions connectionOptions, BindRequest bindRequest) {
+        return Throwing.function(uri -> new SingleServerSet(uri.getHost(), uri.getPort(), supportLDAPS(uri), connectionOptions, bindRequest, null));
     }
 
     @PreDestroy
