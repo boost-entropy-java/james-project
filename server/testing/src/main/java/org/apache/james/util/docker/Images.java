@@ -21,12 +21,12 @@ package org.apache.james.util.docker;
 
 public interface Images {
     String FAKE_SMTP = "weave/rest-smtp-sink:latest";
-    String RABBITMQ = "rabbitmq:3.9.18-management";
+    String RABBITMQ = "rabbitmq:3.12.1-management";
     String ELASTICSEARCH_2 = "elasticsearch:2.4.6";
     String ELASTICSEARCH_6 = "docker.elastic.co/elasticsearch/elasticsearch:6.3.2";
     String ELASTICSEARCH_7 = "docker.elastic.co/elasticsearch/elasticsearch:7.10.2";
     String OPENSEARCH = "opensearchproject/opensearch:2.4.0";
-    String TIKA = "apache/tika:1.28.2";
+    String TIKA = "apache/tika:2.8.0.0";
     String MOCK_SMTP_SERVER = "linagora/mock-smtp-server:0.6";
     String OPEN_LDAP = "osixia/openldap:1.5.0";
 }

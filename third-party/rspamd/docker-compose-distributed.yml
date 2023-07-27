@@ -4,18 +4,25 @@ services:
 
   james:
     depends_on:
-      - elasticsearch
-      - cassandra
-      - tika
-      - rabbitmq
-      - s3
-      - rspamd
+      cassandra:
+        condition: service_healthy
+      opensearch:
+        condition: service_started
+      tika:
+        condition: service_started
+      rabbitmq:
+        condition: service_started
+      s3:
+        condition: service_started
+      rspamd:
+        condition: service_healthy
     image: apache/james:distributed-latest
     container_name: james
     hostname: james.local
+    command:
+      - --generate-keystore
     volumes:
-      - $PWD/target/apache-james-rspamd-3.8.0-SNAPSHOT-jar-with-dependencies.jar:/root/extensions-jars/james-server-rspamd.jar
-      - $PWD/sample-configuration/keystore:/root/conf/keystore
+      - $PWD/target/apache-james-rspamd-jar-with-dependencies.jar:/root/extensions-jars/james-server-rspamd.jar
       - $PWD/sample-configuration/extensions.properties:/root/conf/extensions.properties
       - $PWD/sample-configuration/mailetcontainer_distributed.xml:/root/conf/mailetcontainer.xml
       - $PWD/sample-configuration/listeners.xml:/root/conf/listeners.xml
@@ -31,28 +38,47 @@ services:
       - "587:587"
       - "993:993"
       - "8000:8000"
+    networks:
+      - james
 
   opensearch:
     image: opensearchproject/opensearch:2.1.0
     environment:
       - discovery.type=single-node
+      - DISABLE_INSTALL_DEMO_CONFIG=true
+      - DISABLE_SECURITY_PLUGIN=true
+    networks:
+      james:
+        aliases:
+          - elasticsearch
 
   cassandra:
-    image: cassandra:3.11.10
+    image: cassandra:3.11.15
     ports:
       - "9042:9042"
+    healthcheck:
+      test: [ "CMD-SHELL", "[ $$(nodetool statusgossip) = running ]" ]
+      interval: 3s
+      timeout: 20s
+      retries: 5
+    networks:
+      - james
 
   tika:
-    image: apache/tika:1.26
+    image: apache/tika:2.8.0.0
+    networks:
+      - james
 
   rabbitmq:
-    image: rabbitmq:3.8.18-management
+    image: rabbitmq:3.12.1-management
     ports:
       - "5672:5672"
       - "15672:15672"
+    networks:
+      - james
 
   s3:
-    image: zenko/cloudserver:8.2.6
+    image: registry.scality.com/cloudserver/cloudserver:8.7.25
     container_name: s3.docker.test
     environment:
       - SCALITY_ACCESS_KEY_ID=accessKey1
@@ -60,19 +86,27 @@ services:
       - S3BACKEND=mem
       - LOG_LEVEL=trace
       - REMOTE_MANAGEMENT_DISABLE=1
+    networks:
+      - james
 
   redis:
-    image: redis:6.2.6
+    image: redis:7.0.12
+    networks:
+      - james
 
   clamav:
-    image: clamav/clamav:0.105
+    image: clamav/clamav:1.1
+    networks:
+      - james
 
   rspamd:
     depends_on:
-      - redis
-      - clamav
+      clamav:
+        condition: service_healthy
+      redis:
+        condition: service_started
     container_name: rspamd
-    image: a16bitsysop/rspamd:3.3-r0-alpine3.16.2-r0
+    image: a16bitsysop/rspamd:3.5-r7-alpine3.18.2-r0
     environment:
       - REDIS=redis
       - CLAMAV=clamav
@@ -82,3 +116,8 @@ services:
       - $PWD/sample-configuration/statistic.conf:/etc/rspamd/statistic.conf
     ports:
       - 11334:11334
+    networks:
+      - james
+
+networks:
+  james:

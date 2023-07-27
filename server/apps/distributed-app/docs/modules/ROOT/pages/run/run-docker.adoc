@@ -53,15 +53,15 @@ Firstly, create your own user network on Docker for the James environment:
 
 You need a running *cassandra* in docker which connects to *james* network. To achieve this run:
 
-    $ docker run -d --network james --name=cassandra cassandra:3.11.10
+    $ docker run -d --network james --name=cassandra cassandra:3.11.15
 
 You need a running *rabbitmq* in docker which connects to *james* network. To achieve this run:
 
-    $ docker run -d --network james --name=rabbitmq rabbitmq:3.9.18-management
+    $ docker run -d --network james --name=rabbitmq rabbitmq:3.12.1-management
 
 You need a running *Zenko Cloudserver* objectstorage in docker which connects to *james* network. To achieve this run:
 
-    $ docker run -d --network james --env 'REMOTE_MANAGEMENT_DISABLE=1' --env 'SCALITY_ACCESS_KEY_ID=accessKey1' --env 'SCALITY_SECRET_ACCESS_KEY=secretKey1' --name=s3 zenko/cloudserver:8.2.6
+    $ docker run -d --network james --env 'REMOTE_MANAGEMENT_DISABLE=1' --env 'SCALITY_ACCESS_KEY_ID=accessKey1' --env 'SCALITY_SECRET_ACCESS_KEY=secretKey1' --name=s3 registry.scality.com/cloudserver/cloudserver:8.7.25
 
 You need a running *OpenSearch* in docker which connects to *james* network. To achieve this run:
 
@@ -69,7 +69,7 @@ $ docker run -d --network james -p 9200:9200 --name=opensearch --env 'discovery.
 
 If you want to use all the JMAP search capabilities, you may also need to start Tika container which connects to *james* network:
 
-    $ docker run -d --network james --name=tika apache/tika:1.28.2
+    $ docker run -d --network james --name=tika apache/tika:2.8.0.0
 
 You can find more explanation on the need of Tika in this xref:configure/tika.adoc[page].
 
@@ -122,7 +122,7 @@ You can handle attachment text extraction before indexing in OpenSearch. This ma
 
 Run tika connect to *james* network:
 
-    $ docker run -d --network james --name tika apache/tika:1.28.2
+    $ docker run -d --network james --name tika apache/tika:2.8.0.0
 
 Run James:
 

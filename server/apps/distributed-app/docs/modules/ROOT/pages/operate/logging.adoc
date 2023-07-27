@@ -200,18 +200,18 @@ services:
       - discovery.type=single-node
 
   cassandra:
-    image: cassandra:3.11.10
+    image: cassandra:3.11.15
     ports:
       - "9042:9042"
 
   rabbitmq:
-    image: rabbitmq:3.9.18-management
+    image: rabbitmq:3.12.1-management
     ports:
       - "5672:5672"
       - "15672:15672"
 
   s3:
-    image: zenko/cloudserver:8.2.6
+    image: registry.scality.com/cloudserver/cloudserver:8.7.25
     container_name: s3.docker.test
     environment:
       - SCALITY_ACCESS_KEY_ID=accessKey1
