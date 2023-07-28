@@ -188,8 +188,8 @@ public class ReadOnlyLDAPUsersDAO implements UsersDAO, Configurable {
         ldapConnectionPool.close();
     }
 
-    private Filter createFilter(String username) {
-        Filter specificUserFilter = Filter.createEqualityFilter(ldapConfiguration.getUserIdAttribute(), username);
+    private Filter createFilter(String retrievalName, String ldapUserRetrievalAttribute) {
+        Filter specificUserFilter = Filter.createEqualityFilter(ldapUserRetrievalAttribute, retrievalName);
         return userExtraFilter
             .map(extraFilter -> Filter.createANDFilter(objectClassFilter, specificUserFilter, extraFilter))
             .orElseGet(() -> Filter.createANDFilter(objectClassFilter, specificUserFilter));
@@ -269,7 +269,8 @@ public class ReadOnlyLDAPUsersDAO implements UsersDAO, Configurable {
             .flatMap(Throwing.<String, Stream<SearchResultEntry>>function(s -> entriesFromDN(s, ldapConfiguration.getUserIdAttribute())).sneakyThrow())
             .flatMap(entry -> Optional.ofNullable(entry.getAttribute(ldapConfiguration.getUserIdAttribute())).stream())
             .map(Attribute::getValue)
-            .map(Username::of);
+            .map(Username::of)
+            .distinct();
     }
 
     /**
@@ -297,11 +298,14 @@ public class ReadOnlyLDAPUsersDAO implements UsersDAO, Configurable {
         return results;
     }
 
-    private Optional<ReadOnlyLDAPUser> searchAndBuildUser(Username name) throws LDAPException {
-        SearchResult searchResult = ldapConnectionPool.search(userBase(name),
+    private Optional<ReadOnlyLDAPUser> searchAndBuildUser(Username retrievalName) throws LDAPException {
+        Optional<String> resolveLocalPartAttribute = ldapConfiguration.getResolveLocalPartAttribute();
+        String[] returnedAttributes = { ldapConfiguration.getUserIdAttribute() };
+
+        SearchResult searchResult = ldapConnectionPool.search(userBase(retrievalName),
             SearchScope.SUB,
-            createFilter(name.asString()),
-            ldapConfiguration.getUserIdAttribute());
+            createFilter(retrievalName.asString(), evaluateLdapUserRetrievalAttribute(retrievalName, resolveLocalPartAttribute)),
+            returnedAttributes);
 
         SearchResultEntry result = searchResult.getSearchEntries()
             .stream()
@@ -315,9 +319,18 @@ public class ReadOnlyLDAPUsersDAO implements UsersDAO, Configurable {
         if (!ldapConfiguration.getRestriction().isActivated()
             || userInGroupsMembershipList(result.getParsedDN(), ldapConfiguration.getRestriction().getGroupMembershipLists(ldapConnectionPool))) {
 
-            return Optional.of(new ReadOnlyLDAPUser(name, result.getParsedDN(), ldapConnectionPool));
+            Username translatedUsername = Username.of(result.getAttributeValue(ldapConfiguration.getUserIdAttribute()));
+            return Optional.of(new ReadOnlyLDAPUser(translatedUsername, result.getParsedDN(), ldapConnectionPool));
         }
         return Optional.empty();
+    }
+
+    private String evaluateLdapUserRetrievalAttribute(Username retrievalName, Optional<String> resolveLocalPartAttribute) {
+        if (retrievalName.asString().contains("@")) {
+            return ldapConfiguration.getUserIdAttribute();
+        } else {
+            return resolveLocalPartAttribute.orElse(ldapConfiguration.getUserIdAttribute());
+        }
     }
 
     private Optional<ReadOnlyLDAPUser> buildUser(DN userDN) throws LDAPException {
@@ -330,7 +343,9 @@ public class ReadOnlyLDAPUsersDAO implements UsersDAO, Configurable {
 
     @Override
     public boolean contains(Username name) throws UsersRepositoryException {
-        return getUserByName(name).isPresent();
+        return getUserByName(name)
+            .filter(readOnlyLDAPUser -> readOnlyLDAPUser.getUserName().equals(name))
+            .isPresent();
     }
 
     @Override
@@ -350,6 +365,8 @@ public class ReadOnlyLDAPUsersDAO implements UsersDAO, Configurable {
         return getValidUserDNs().stream()
             .map(Throwing.function(this::buildUser).sneakyThrow())
             .flatMap(Optional::stream)
+            .map(ReadOnlyLDAPUser::getUserName)
+            .distinct()
             .count();
     }
 
@@ -372,6 +389,7 @@ public class ReadOnlyLDAPUsersDAO implements UsersDAO, Configurable {
             return buildUserCollection(getValidUserDNs())
                 .stream()
                 .map(ReadOnlyLDAPUser::getUserName)
+                .distinct()
                 .iterator();
         } catch (LDAPException e) {
             throw new UsersRepositoryException("Unable to list users from ldap", e);
