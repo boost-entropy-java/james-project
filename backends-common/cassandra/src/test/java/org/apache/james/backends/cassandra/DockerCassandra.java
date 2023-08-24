@@ -117,26 +117,32 @@ public class DockerCassandra {
         // If available try to access the image shared by all maven projects
         // This avoids rebuilding one for each maven surefire fork.
         // BUILD_ID should be set by the execution context, here JenkinsFile
-        return Optional.ofNullable(System.getenv("BUILD_ID"))
+        return getFixedBuildId()
             // Default to an image discriminator specific to this JVM
             .orElse(UUID.randomUUID().toString());
+    }
+
+    private static Optional<String> getFixedBuildId() {
+        return Optional.ofNullable(System.getenv("BUILD_ID"));
     }
 
     private static final int CASSANDRA_PORT = 9042;
     private static final int CASSANDRA_MEMORY = 1024;
 
     private static final String CASSANDRA_CONFIG_DIR = "$CASSANDRA_CONFIG";
-    private static final String JVM_OPTIONS = CASSANDRA_CONFIG_DIR + "/jvm.options";
+    private static final String JVM_OPTIONS = CASSANDRA_CONFIG_DIR + "/jvm-server.options";
 
     private final GenericContainer<?> cassandraContainer;
     private final DockerClient client;
 
     @SuppressWarnings("resource")
     public DockerCassandra() {
-        this("cassandra_4_1_3-" + buildSpecificImageDiscriminator(), AdditionalDockerFileStep.IDENTITY);
+        this("cassandra_4_1_3-" + buildSpecificImageDiscriminator(),
+            getFixedBuildId().isEmpty(),
+            AdditionalDockerFileStep.IDENTITY);
     }
 
-    private DockerCassandra(String imageName, AdditionalDockerFileStep additionalSteps) {
+    private DockerCassandra(String imageName, boolean deleteImageAfterUsage, AdditionalDockerFileStep additionalSteps) {
         client = DockerClientFactory.instance().client();
         EventsCmd eventsCmd = client.eventsCmd().withEventTypeFilter(EventType.IMAGE).withImageFilter(imageName);
         eventsCmd.exec(new ResultCallback<Event>() {
@@ -163,21 +169,26 @@ public class DockerCassandra {
             public void close() {
             }
         });
-        boolean doNotDeleteImageAfterUsage = false;
+
+        String memorySettingCommand = Optional.ofNullable(System.getenv("CI"))
+            .map(Boolean::parseBoolean)
+            .filter(Boolean.TRUE::equals)
+            .map(ci -> "echo \"\" ")
+            .orElse("echo \"-Xms" + CASSANDRA_MEMORY + "M\" >> " + JVM_OPTIONS
+                + "&& echo \"-Xmx" + CASSANDRA_MEMORY + "M\" >> " + JVM_OPTIONS);
+
         cassandraContainer = new GenericContainer<>(
-            new ImageFromDockerfile(imageName,doNotDeleteImageAfterUsage)
+            new ImageFromDockerfile(imageName,deleteImageAfterUsage)
                 .withDockerfileFromBuilder(builder ->
                     additionalSteps.applyStep(builder
                         .from("cassandra:4.1.3")
                         .env("CASSANDRA_CONFIG", "/etc/cassandra")
-                        .run("echo \"-Xms" + CASSANDRA_MEMORY + "M\" >> " + JVM_OPTIONS
-                            + "&& echo \"-Xmx" + CASSANDRA_MEMORY + "M\" >> " + JVM_OPTIONS
+                        .run(memorySettingCommand
                             + "&& echo \"-Dcassandra.skip_wait_for_gossip_to_settle=0\" >> " + JVM_OPTIONS
                             + "&& echo \"-Dcassandra.load_ring_state=false\" >> " + JVM_OPTIONS
                             + "&& echo \"-Dcassandra.initial_token=1 \" >> " + JVM_OPTIONS
-                            + "&& echo \"-Dcassandra.num_tokens=nil \" >> " + JVM_OPTIONS
-                            + "&& echo \"-Dcassandra.allocate_tokens_for_local_replication_factor=nil \" >> " + JVM_OPTIONS
                             + "&& sed -i 's/auto_snapshot: true/auto_snapshot: false/g' /etc/cassandra/cassandra.yaml"
+                            + "&& sed -i 's/allocate_tokens_for_local_replication_factor: 3/allocate_tokens_for_local_replication_factor: 0/g' /etc/cassandra/cassandra.yaml"
                             + "&& echo 'authenticator: PasswordAuthenticator' >> /etc/cassandra/cassandra.yaml"
                             + "&& echo 'authorizer: org.apache.cassandra.auth.CassandraAuthorizer' >> /etc/cassandra/cassandra.yaml"))
                         .build()))
