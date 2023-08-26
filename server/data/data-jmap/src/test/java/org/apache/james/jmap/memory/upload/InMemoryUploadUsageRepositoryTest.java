@@ -17,32 +17,25 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.webadmin.routes;
+package org.apache.james.jmap.memory.upload;
 
-import javax.mail.internet.AddressException;
+import org.apache.james.jmap.api.upload.UploadUsageRepository;
+import org.apache.james.jmap.api.upload.UploadUsageRepositoryContract;
+import org.junit.jupiter.api.BeforeEach;
 
-import org.apache.james.core.MailAddress;
-import org.apache.james.webadmin.utils.ErrorResponder;
-import org.eclipse.jetty.http.HttpStatus;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+public class InMemoryUploadUsageRepositoryTest implements UploadUsageRepositoryContract {
 
-class MailAddressParser {
+    private InMemoryUploadUsageRepository inMemoryUploadUsageRepository;
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(MailAddressParser.class);
+    @BeforeEach
+    private void setup() {
+        inMemoryUploadUsageRepository = new InMemoryUploadUsageRepository();
+        resetCounterToZero();
+    }
 
-    static MailAddress parseMailAddress(String address, String addressType) {
-        try {
-            return new MailAddress(address);
-        } catch (AddressException e) {
-            LOGGER.error("The {} {} is not an email address", addressType, address);
-            throw ErrorResponder.builder()
-                .statusCode(HttpStatus.BAD_REQUEST_400)
-                .type(ErrorResponder.ErrorType.INVALID_ARGUMENT)
-                .message("The %s is not an email address", addressType)
-                .cause(e)
-                .haltError();
-        }
+    @Override
+    public UploadUsageRepository uploadUsageRepository() {
+        return inMemoryUploadUsageRepository;
     }
 
 }

@@ -25,6 +25,7 @@ import static java.time.temporal.ChronoUnit.HOURS;
 import static org.apache.james.backends.cassandra.Scenario.Builder.executeNormally;
 import static org.apache.james.backends.cassandra.Scenario.Builder.fail;
 import static org.apache.james.backends.cassandra.Scenario.Builder.returnEmpty;
+import static org.apache.james.backends.cassandra.StatementRecorder.Selector.preparedStatementStartingWith;
 import static org.apache.james.backends.rabbitmq.Constants.EMPTY_ROUTING_KEY;
 import static org.apache.james.queue.api.Mails.defaultMail;
 import static org.apache.james.queue.api.Mails.defaultMailNoRecipient;
@@ -54,6 +55,7 @@ import java.util.stream.Stream;
 
 import org.apache.james.backends.cassandra.CassandraCluster;
 import org.apache.james.backends.cassandra.CassandraClusterExtension;
+import org.apache.james.backends.cassandra.StatementRecorder;
 import org.apache.james.backends.cassandra.components.CassandraModule;
 import org.apache.james.backends.cassandra.versions.CassandraSchemaVersionModule;
 import org.apache.james.backends.rabbitmq.RabbitMQExtension;
@@ -65,9 +67,11 @@ import org.apache.james.blob.cassandra.CassandraBlobStoreFactory;
 import org.apache.james.blob.mail.MimeMessageStore;
 import org.apache.james.core.builder.MimeMessageBuilder;
 import org.apache.james.eventsourcing.eventstore.cassandra.CassandraEventStoreModule;
+import org.apache.james.lifecycle.api.LifecycleUtil;
 import org.apache.james.metrics.api.Gauge;
 import org.apache.james.metrics.tests.RecordingMetricFactory;
 import org.apache.james.queue.api.MailQueue;
+import org.apache.james.queue.api.MailQueueFactory;
 import org.apache.james.queue.api.MailQueueMetricContract;
 import org.apache.james.queue.api.MailQueueMetricExtension;
 import org.apache.james.queue.api.ManageableMailQueue;
@@ -84,12 +88,13 @@ import org.apache.james.queue.rabbitmq.view.cassandra.model.BucketedSlices.Slice
 import org.apache.james.util.streams.Iterators;
 import org.apache.james.utils.UpdatableTickingClock;
 import org.apache.mailet.Mail;
+import org.apache.mailet.base.test.FakeMail;
 import org.assertj.core.api.SoftAssertions;
-import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.mockito.ArgumentCaptor;
@@ -107,7 +112,7 @@ import reactor.rabbitmq.Sender;
 class RabbitMQMailQueueTest {
     private static final HashBlobId.Factory BLOB_ID_FACTORY = new HashBlobId.Factory();
     private static final int THREE_BUCKET_COUNT = 3;
-    private static final int UPDATE_BROWSE_START_PACE = 2;
+    private static final int UPDATE_BROWSE_START_PACE = 25;
     private static final Duration ONE_HOUR_SLICE_WINDOW = Duration.ofHours(1);
     private static final org.apache.james.queue.api.MailQueueName SPOOL = org.apache.james.queue.api.MailQueueName.of("spool");
     private static final Instant IN_SLICE_1 = Instant.now().minus(60, DAYS);
@@ -149,7 +154,8 @@ class RabbitMQMailQueueTest {
                     .sizeMetricsEnabled(true)
                     .build(),
                 CassandraBlobStoreFactory.forTesting(cassandra.getConf(), new RecordingMetricFactory())
-                    .passthrough());
+                    .passthrough(),
+                MailQueueFactory.prefetchCount(3));
         }
 
         @Override
@@ -195,6 +201,71 @@ class RabbitMQMailQueueTest {
                 "2-1", "2-2", "2-3", "2-4", "2-5",
                 "3-1", "3-2", "3-3", "3-4", "3-5",
                 "5-1", "5-2", "5-3", "5-4", "5-5");
+        }
+
+        @Test
+        void browseStartShouldBeUpdated(CassandraCluster cassandraCluster, MailQueueMetricExtension.MailQueueMetricTestSystem metricTestSystem) throws Exception {
+            setUp(cassandraCluster, metricTestSystem,
+                RabbitMQMailQueueConfiguration.builder()
+                    .sizeMetricsEnabled(true)
+                    .build(),
+                CassandraBlobStoreFactory.forTesting(cassandraCluster.getConf(), new RecordingMetricFactory())
+                    .passthrough(),
+                MailQueueFactory.prefetchCount(1));
+
+            int emailCount = 250;
+
+            StatementRecorder.Selector selector = preparedStatementStartingWith("UPDATE browsestart");
+            StatementRecorder statementRecorder = cassandraCluster.getConf()
+                .recordStatements(selector);
+
+            clock.setInstant(IN_SLICE_1);
+            enqueueSomeMails(namePatternForSlice(1), emailCount);
+            dequeueMails(emailCount);
+
+            clock.setInstant(IN_SLICE_2);
+            enqueueSomeMails(namePatternForSlice(2), emailCount);
+            dequeueMails(emailCount);
+
+            clock.setInstant(IN_SLICE_3);
+            enqueueSomeMails(namePatternForSlice(3), emailCount);
+            dequeueMails(emailCount);
+
+            // The actual rate of update should actually be lower than the update probability.
+            assertThat(statementRecorder.listExecutedStatements(selector))
+                .hasSizeBetween(2, 12);
+        }
+
+        @Test
+        void contentStartShouldBeUpdated(CassandraCluster cassandraCluster, MailQueueMetricExtension.MailQueueMetricTestSystem metricTestSystem) throws Exception {
+            setUp(cassandraCluster, metricTestSystem,
+                RabbitMQMailQueueConfiguration.builder()
+                    .sizeMetricsEnabled(true)
+                    .build(),
+                CassandraBlobStoreFactory.forTesting(cassandraCluster.getConf(), new RecordingMetricFactory())
+                    .passthrough(),
+                MailQueueFactory.prefetchCount(1));
+
+            int emailCount = 250;
+
+            StatementRecorder.Selector selector = preparedStatementStartingWith("UPDATE contentstart");
+            StatementRecorder statementRecorder = cassandraCluster.getConf().recordStatements(selector);
+
+            clock.setInstant(IN_SLICE_1);
+            enqueueSomeMails(namePatternForSlice(1), emailCount);
+            dequeueMails(emailCount);
+
+            clock.setInstant(IN_SLICE_2);
+            enqueueSomeMails(namePatternForSlice(2), emailCount);
+            dequeueMails(emailCount);
+
+            clock.setInstant(IN_SLICE_3);
+            enqueueSomeMails(namePatternForSlice(3), emailCount);
+            dequeueMails(emailCount);
+
+            // The actual rate of update should actually be lower than the update probability.
+            assertThat(statementRecorder.listExecutedStatements(selector))
+                .hasSizeBetween(2, 12);
         }
 
         @Test
@@ -307,7 +378,7 @@ class RabbitMQMailQueueTest {
         @Test
         void enqueuedEmailsShouldEventuallyBeCleaned() {
             ManageableMailQueue mailQueue = getManageableMailQueue();
-            int emailCount = 5;
+            int emailCount = 100;
 
             clock.setInstant(IN_SLICE_1);
             enqueueSomeMails(namePatternForSlice(1), emailCount);
@@ -322,10 +393,10 @@ class RabbitMQMailQueueTest {
             enqueueSomeMails(namePatternForSlice(5), emailCount);
 
             clock.setInstant(IN_SLICE_7);
-            dequeueMails(5);
-            dequeueMails(5);
-            dequeueMails(5);
-            dequeueMails(5);
+            dequeueMails(emailCount);
+            dequeueMails(emailCount);
+            dequeueMails(emailCount);
+            dequeueMails(emailCount);
 
             // ensure slice 1 was cleaned
             EnqueuedMailsDAO mailsDAO = new EnqueuedMailsDAO(cassandraCluster.getCassandraCluster().getConf(), new HashBlobId.Factory());
@@ -651,9 +722,13 @@ class RabbitMQMailQueueTest {
 
         private void enqueueSomeMails(Function<Integer, String> namePattern, int emailCount) {
             IntStream.rangeClosed(1, emailCount)
-                .forEach(Throwing.intConsumer(i -> enQueue(defaultMail()
-                    .name(namePattern.apply(i))
-                    .build())));
+                .forEach(Throwing.intConsumer(i -> {
+                    FakeMail mail = defaultMail()
+                        .name(namePattern.apply(i))
+                        .build();
+                    enQueue(mail);
+                    LifecycleUtil.dispose(mail);
+                }));
         }
 
         private void dequeueMails(int times) {
@@ -673,7 +748,9 @@ class RabbitMQMailQueueTest {
                 .subscribe();
 
             try {
-                await().untilAsserted(() -> assertThat(counter.get()).isGreaterThanOrEqualTo(times));
+                await()
+                    .atMost(Duration.ofMinutes(10))
+                    .untilAsserted(() -> assertThat(counter.get()).isGreaterThanOrEqualTo(times));
             } finally {
                 disposable.dispose();
             }
@@ -918,7 +995,8 @@ class RabbitMQMailQueueTest {
                     .sizeMetricsEnabled(false)
                     .build(),
                 CassandraBlobStoreFactory.forTesting(cassandra.getConf(), new RecordingMetricFactory())
-                    .passthrough());
+                    .passthrough(),
+                MailQueueFactory.prefetchCount(3));
         }
 
         @Test
@@ -941,7 +1019,8 @@ class RabbitMQMailQueueTest {
                     .sizeMetricsEnabled(true)
                     .build(),
                 CassandraBlobStoreFactory.forTesting(cassandra.getConf(), new RecordingMetricFactory())
-                    .deduplication());
+                    .deduplication(),
+                MailQueueFactory.prefetchCount(3));
         }
 
         @Test
@@ -962,26 +1041,21 @@ class RabbitMQMailQueueTest {
                     .setText(identicalContent))
                 .build());
 
-            Flux<MailQueue.MailQueueItem> dequeueFlux = Flux.from(mailQueue.deQueue());
-
-            List<MailQueue.MailQueueItem> items = dequeueFlux.take(2)
+            Flux.from(mailQueue.deQueue())
+                .take(2)
                 .concatMap(mailQueueItem ->
                     Mono.fromCallable(() -> {
+                        assertThat(mailQueueItem.getMail().getMessage().getContent()).isEqualTo(identicalContent);
                         mailQueueItem.done(MailQueue.MailQueueItem.CompletionStatus.SUCCESS);
                         return mailQueueItem;
-                    }).subscribeOn(Schedulers.fromExecutor(EXECUTOR))
-                        .thenReturn(mailQueueItem)
-                        .onErrorResume(e -> Mono.just(mailQueueItem)))
+                    }).subscribeOn(Schedulers.fromExecutor(EXECUTOR)))
                 .collectList()
                 .block(Duration.ofSeconds(10));
-
-            assertThat(items)
-                .allSatisfy(Throwing.consumer(item -> assertThat(item.getMail().getMessage().getContent())
-                    .isEqualTo(identicalContent)));
         }
     }
 
-    private void setUp(CassandraCluster cassandra, MailQueueMetricExtension.MailQueueMetricTestSystem metricTestSystem, RabbitMQMailQueueConfiguration configuration, BlobStore blobStore) throws Exception {
+    private void setUp(CassandraCluster cassandra, MailQueueMetricExtension.MailQueueMetricTestSystem metricTestSystem, RabbitMQMailQueueConfiguration configuration,
+                       BlobStore blobStore, MailQueueFactory.PrefetchCount prefetchCount) throws Exception {
         MimeMessageStore.Factory mimeMessageStoreFactory = MimeMessageStore.factory(blobStore);
         clock = new UpdatableTickingClock(IN_SLICE_1);
 
@@ -1008,6 +1082,6 @@ class RabbitMQMailQueueTest {
             configuration);
         mqManagementApi = new RabbitMQMailQueueManagement(rabbitMQExtension.managementAPI());
         mailQueueFactory = new RabbitMQMailQueueFactory(rabbitMQExtension.getSender(), mqManagementApi, factory, rabbitMQExtension.getRabbitMQ().getConfiguration());
-        mailQueue = mailQueueFactory.createQueue(SPOOL);
+        mailQueue = mailQueueFactory.createQueue(SPOOL, prefetchCount);
     }
 }

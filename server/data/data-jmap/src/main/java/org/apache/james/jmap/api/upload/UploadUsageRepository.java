@@ -17,32 +17,18 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.webadmin.routes;
+package org.apache.james.jmap.api.upload;
 
-import javax.mail.internet.AddressException;
+import org.apache.james.core.Username;
+import org.apache.james.core.quota.QuotaSizeUsage;
+import org.reactivestreams.Publisher;
 
-import org.apache.james.core.MailAddress;
-import org.apache.james.webadmin.utils.ErrorResponder;
-import org.eclipse.jetty.http.HttpStatus;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+public interface UploadUsageRepository {
+    Publisher<Void> increaseSpace(Username username, QuotaSizeUsage usage);
 
-class MailAddressParser {
+    Publisher<Void> decreaseSpace(Username username, QuotaSizeUsage usage);
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(MailAddressParser.class);
+    Publisher<QuotaSizeUsage> getSpaceUsage(Username username);
 
-    static MailAddress parseMailAddress(String address, String addressType) {
-        try {
-            return new MailAddress(address);
-        } catch (AddressException e) {
-            LOGGER.error("The {} {} is not an email address", addressType, address);
-            throw ErrorResponder.builder()
-                .statusCode(HttpStatus.BAD_REQUEST_400)
-                .type(ErrorResponder.ErrorType.INVALID_ARGUMENT)
-                .message("The %s is not an email address", addressType)
-                .cause(e)
-                .haltError();
-        }
-    }
-
+    Publisher<Void> resetSpace(Username username, QuotaSizeUsage usage);
 }

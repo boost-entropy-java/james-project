@@ -21,7 +21,6 @@ package org.apache.james.queue.rabbitmq.view.cassandra;
 
 import static org.apache.james.queue.rabbitmq.view.cassandra.model.BucketedSlices.BucketId;
 import static org.apache.james.queue.rabbitmq.view.cassandra.model.BucketedSlices.Slice;
-import static org.apache.james.util.ReactorUtils.DEFAULT_CONCURRENCY;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -134,7 +133,7 @@ public class CassandraMailQueueBrowser {
 
     Flux<EnqueuedItemWithSlicingContext> browseReferences(MailQueueName queueName, Instant browseStart) {
         return allSlicesStartingAt(browseStart)
-            .flatMapSequential(slice -> browseSlice(queueName, slice), 4);
+            .concatMap(slice -> browseSlice(queueName, slice));
     }
 
     private Mono<Pair<EnqueuedItem, Mail>> toMailFuture(EnqueuedItemWithSlicingContext enqueuedItemWithSlicingContext) {
@@ -156,15 +155,14 @@ public class CassandraMailQueueBrowser {
     }
 
     private Flux<EnqueuedItemWithSlicingContext> browseSlice(MailQueueName queueName, Slice slice) {
-        return
-            allBucketIds()
-                .concatMap(bucketId -> browseBucket(queueName, slice, bucketId), DEFAULT_CONCURRENCY)
-                .sort(Comparator.comparing(enqueuedMail -> enqueuedMail.getEnqueuedItem().getEnqueuedTime()));
+        return allBucketIds()
+            .concatMap(bucketId -> browseBucket(queueName, slice, bucketId), 4)
+            .sort(Comparator.comparing(enqueuedMail -> enqueuedMail.getEnqueuedItem().getEnqueuedTime()));
     }
 
     private Flux<EnqueuedItemWithSlicingContext> browseBucket(MailQueueName queueName, Slice slice, BucketId bucketId) {
         return enqueuedMailsDao.selectEnqueuedMails(queueName, slice, bucketId)
-            .filterWhen(mailReference -> deletedMailsDao.isStillEnqueued(queueName, mailReference.getEnqueuedItem().getEnqueueId()), DEFAULT_CONCURRENCY);
+            .filterWhen(mailReference -> deletedMailsDao.isStillEnqueued(queueName, mailReference.getEnqueuedItem().getEnqueueId()), 4);
     }
 
     private Flux<Slice> allSlicesStartingAt(Instant browseStart) {
