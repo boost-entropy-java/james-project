@@ -17,16 +17,26 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.mailbox.cassandra.table;
+package org.apache.james.mailbox.cassandra.quota;
 
-import com.datastax.oss.driver.api.core.CqlIdentifier;
+import org.apache.james.backends.cassandra.CassandraClusterExtension;
+import org.apache.james.backends.cassandra.components.CassandraModule;
+import org.apache.james.backends.cassandra.components.CassandraMutualizedQuotaModule;
+import org.apache.james.mailbox.cassandra.modules.CassandraMailboxQuotaModule;
+import org.apache.james.mailbox.cassandra.modules.CassandraQuotaModule;
+import org.apache.james.mailbox.quota.CurrentQuotaManager;
+import org.apache.james.mailbox.store.quota.CurrentQuotaManagerContract;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
-public interface CassandraQuotaLimitTable {
-    String TABLE_NAME = "quotaLimit";
+class CassandraCurrentQuotaManagerV1Test implements CurrentQuotaManagerContract {
 
-    CqlIdentifier IDENTIFIER = CqlIdentifier.fromCql("identifier");
-    CqlIdentifier QUOTA_COMPONENT = CqlIdentifier.fromCql("quotaComponent");
-    CqlIdentifier QUOTA_TYPE = CqlIdentifier.fromCql("quotaType");
-    CqlIdentifier QUOTA_SCOPE = CqlIdentifier.fromCql("quotaScope");
-    CqlIdentifier QUOTA_LIMIT = CqlIdentifier.fromCql("quotaLimit");
+    @RegisterExtension
+    static CassandraClusterExtension cassandraCluster = new CassandraClusterExtension(CassandraModule.aggregateModules(CassandraQuotaModule.MODULE,
+        CassandraMailboxQuotaModule.MODULE,
+        CassandraMutualizedQuotaModule.MODULE));
+
+    @Override
+    public CurrentQuotaManager testee() {
+        return new CassandraCurrentQuotaManagerV1(cassandraCluster.getCassandraCluster().getConf());
+    }
 }

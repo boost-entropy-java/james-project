@@ -17,15 +17,21 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.mailbox.cassandra.table;
+package org.apache.james.modules.mailbox;
 
-import com.datastax.oss.driver.api.core.CqlIdentifier;
+import org.apache.james.mailbox.cassandra.quota.CassandraCurrentQuotaManagerV2;
+import org.apache.james.mailbox.cassandra.quota.FakeCassandraCurrentQuotaManager;
+import org.apache.james.mailbox.quota.CurrentQuotaManager;
 
-public interface CassandraQuotaCurrentValueTable {
-    String TABLE_NAME = "quotaCurrentValue";
+import com.google.inject.AbstractModule;
+import com.google.inject.Scopes;
+import com.google.inject.name.Names;
 
-    CqlIdentifier IDENTIFIER = CqlIdentifier.fromCql("identifier");
-    CqlIdentifier QUOTA_COMPONENT = CqlIdentifier.fromCql("quotaComponent");
-    CqlIdentifier QUOTA_TYPE = CqlIdentifier.fromCql("quotaType");
-    CqlIdentifier CURRENT_VALUE = CqlIdentifier.fromCql("currentValue");
+public class CassandraMailboxQuotaModule extends AbstractModule {
+    @Override
+    protected void configure() {
+        bind(CassandraCurrentQuotaManagerV2.class).in(Scopes.SINGLETON);
+        bind(CurrentQuotaManager.class).to(CassandraCurrentQuotaManagerV2.class);
+        bind(CurrentQuotaManager.class).annotatedWith(Names.named("old")).to(FakeCassandraCurrentQuotaManager.class);
+    }
 }

@@ -46,7 +46,8 @@ import com.datastax.oss.driver.api.core.cql.PreparedStatement;
 
 import reactor.core.publisher.Mono;
 
-public class CassandraCurrentQuotaManager implements CurrentQuotaManager {
+@Deprecated() // To be removed after release 3.9.0
+public class CassandraCurrentQuotaManagerV1 implements CurrentQuotaManager {
 
     private final CassandraAsyncExecutor cassandraAsyncExecutor;
     private final PreparedStatement increaseStatement;
@@ -56,7 +57,7 @@ public class CassandraCurrentQuotaManager implements CurrentQuotaManager {
     private final PreparedStatement getCurrentQuotasStatement;
 
     @Inject
-    public CassandraCurrentQuotaManager(CqlSession session) {
+    public CassandraCurrentQuotaManagerV1(CqlSession session) {
         this.cassandraAsyncExecutor = new CassandraAsyncExecutor(session);
         this.increaseStatement = session.prepare(update(TABLE_NAME)
             .increment(MESSAGE_COUNT, bindMarker())

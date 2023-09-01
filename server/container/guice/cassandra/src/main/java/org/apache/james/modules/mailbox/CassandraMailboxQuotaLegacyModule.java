@@ -17,19 +17,26 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.jmap.api.upload;
+package org.apache.james.modules.mailbox;
 
-import java.io.InputStream;
+import org.apache.james.backends.cassandra.components.CassandraModule;
+import org.apache.james.mailbox.cassandra.quota.CassandraCurrentQuotaManagerV1;
+import org.apache.james.mailbox.quota.CurrentQuotaManager;
 
-import org.apache.james.core.Username;
-import org.apache.james.jmap.api.model.Upload;
-import org.apache.james.jmap.api.model.UploadId;
-import org.apache.james.jmap.api.model.UploadMetaData;
-import org.apache.james.mailbox.model.ContentType;
-import org.reactivestreams.Publisher;
+import com.google.inject.AbstractModule;
+import com.google.inject.Scopes;
+import com.google.inject.multibindings.Multibinder;
+import com.google.inject.name.Names;
 
-public interface UploadService {
-    Publisher<UploadMetaData> upload(InputStream data, ContentType contentType, Username user);
+@Deprecated() // To be removed after release 3.9.0
+public class CassandraMailboxQuotaLegacyModule extends AbstractModule {
+    @Override
+    protected void configure() {
+        bind(CassandraCurrentQuotaManagerV1.class).in(Scopes.SINGLETON);
+        bind(CurrentQuotaManager.class).to(CassandraCurrentQuotaManagerV1.class);
+        bind(CurrentQuotaManager.class).annotatedWith(Names.named("old")).to(CassandraCurrentQuotaManagerV1.class);
 
-    Publisher<Upload> retrieve(UploadId id, Username user);
+        Multibinder<CassandraModule> cassandraDataDefinitions = Multibinder.newSetBinder(binder(), CassandraModule.class);
+        cassandraDataDefinitions.addBinding().toInstance(org.apache.james.mailbox.cassandra.modules.CassandraMailboxQuotaModule.MODULE);
+    }
 }

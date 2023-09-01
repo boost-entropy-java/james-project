@@ -17,19 +17,15 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.jmap.api.upload;
+package org.apache.james.backends.cassandra.components;
 
-import java.io.InputStream;
+import com.datastax.oss.driver.api.core.CqlIdentifier;
 
-import org.apache.james.core.Username;
-import org.apache.james.jmap.api.model.Upload;
-import org.apache.james.jmap.api.model.UploadId;
-import org.apache.james.jmap.api.model.UploadMetaData;
-import org.apache.james.mailbox.model.ContentType;
-import org.reactivestreams.Publisher;
+public interface CassandraQuotaCurrentValueTable {
+    String TABLE_NAME = "quotaCurrentValue";
 
-public interface UploadService {
-    Publisher<UploadMetaData> upload(InputStream data, ContentType contentType, Username user);
-
-    Publisher<Upload> retrieve(UploadId id, Username user);
+    CqlIdentifier IDENTIFIER = CqlIdentifier.fromCql("identifier");
+    CqlIdentifier QUOTA_COMPONENT = CqlIdentifier.fromCql("quotaComponent");
+    CqlIdentifier QUOTA_TYPE = CqlIdentifier.fromCql("quotaType");
+    CqlIdentifier CURRENT_VALUE = CqlIdentifier.fromCql("currentValue");
 }

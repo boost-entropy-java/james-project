@@ -17,19 +17,16 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.jmap.api.upload;
+package org.apache.james.backends.cassandra.components;
 
-import java.io.InputStream;
+import com.datastax.oss.driver.api.core.CqlIdentifier;
 
-import org.apache.james.core.Username;
-import org.apache.james.jmap.api.model.Upload;
-import org.apache.james.jmap.api.model.UploadId;
-import org.apache.james.jmap.api.model.UploadMetaData;
-import org.apache.james.mailbox.model.ContentType;
-import org.reactivestreams.Publisher;
+public interface CassandraQuotaLimitTable {
+    String TABLE_NAME = "quotaLimit";
 
-public interface UploadService {
-    Publisher<UploadMetaData> upload(InputStream data, ContentType contentType, Username user);
-
-    Publisher<Upload> retrieve(UploadId id, Username user);
+    CqlIdentifier IDENTIFIER = CqlIdentifier.fromCql("identifier");
+    CqlIdentifier QUOTA_COMPONENT = CqlIdentifier.fromCql("quotaComponent");
+    CqlIdentifier QUOTA_TYPE = CqlIdentifier.fromCql("quotaType");
+    CqlIdentifier QUOTA_SCOPE = CqlIdentifier.fromCql("quotaScope");
+    CqlIdentifier QUOTA_LIMIT = CqlIdentifier.fromCql("quotaLimit");
 }

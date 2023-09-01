@@ -17,19 +17,30 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.jmap.api.upload;
+package org.apache.james.mailbox.cassandra.quota;
 
-import java.io.InputStream;
+import org.apache.james.backends.cassandra.CassandraCluster;
+import org.apache.james.backends.cassandra.CassandraClusterExtension;
+import org.apache.james.backends.cassandra.components.CassandraMutualizedQuotaModule;
+import org.apache.james.backends.cassandra.components.CassandraQuotaCurrentValueDao;
+import org.apache.james.mailbox.quota.CurrentQuotaManager;
+import org.apache.james.mailbox.store.quota.CurrentQuotaManagerContract;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
-import org.apache.james.core.Username;
-import org.apache.james.jmap.api.model.Upload;
-import org.apache.james.jmap.api.model.UploadId;
-import org.apache.james.jmap.api.model.UploadMetaData;
-import org.apache.james.mailbox.model.ContentType;
-import org.reactivestreams.Publisher;
+public class CassandraCurrentQuotaManagerV2Test implements CurrentQuotaManagerContract {
+    @RegisterExtension
+    static CassandraClusterExtension cassandraCluster = new CassandraClusterExtension(CassandraMutualizedQuotaModule.MODULE);
 
-public interface UploadService {
-    Publisher<UploadMetaData> upload(InputStream data, ContentType contentType, Username user);
+    private CassandraCurrentQuotaManagerV2 currentQuotaManager;
 
-    Publisher<Upload> retrieve(UploadId id, Username user);
+    @BeforeEach
+    void setUp(CassandraCluster cassandra) {
+        currentQuotaManager = new CassandraCurrentQuotaManagerV2(new CassandraQuotaCurrentValueDao(cassandra.getConf()));
+    }
+
+    @Override
+    public CurrentQuotaManager testee() {
+        return currentQuotaManager;
+    }
 }

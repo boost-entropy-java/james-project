@@ -19,31 +19,55 @@
 
 package org.apache.james.jmap.cassandra.upload;
 
+import java.time.Clock;
+
+import org.apache.james.backends.cassandra.CassandraCluster;
 import org.apache.james.backends.cassandra.CassandraClusterExtension;
 import org.apache.james.backends.cassandra.components.CassandraModule;
-import org.apache.james.backends.cassandra.components.CassandraMutualizedQuotaModule;
 import org.apache.james.backends.cassandra.components.CassandraQuotaCurrentValueDao;
+import org.apache.james.blob.api.BucketName;
+import org.apache.james.blob.api.HashBlobId;
+import org.apache.james.blob.memory.MemoryBlobStoreDAO;
+import org.apache.james.jmap.api.upload.UploadRepository;
+import org.apache.james.jmap.api.upload.UploadService;
+import org.apache.james.jmap.api.upload.UploadServiceContract;
+import org.apache.james.jmap.api.upload.UploadServiceDefaultImpl;
 import org.apache.james.jmap.api.upload.UploadUsageRepository;
-import org.apache.james.jmap.api.upload.UploadUsageRepositoryContract;
 import org.apache.james.mailbox.cassandra.modules.CassandraQuotaModule;
+import org.apache.james.server.blob.deduplication.DeDuplicationBlobStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-public class CassandraUploadUsageRepositoryTest implements UploadUsageRepositoryContract {
-
+class CassandraUploadServiceTest implements UploadServiceContract {
     @RegisterExtension
-    static CassandraClusterExtension cassandraCluster = new CassandraClusterExtension(CassandraModule.aggregateModules(CassandraQuotaModule.MODULE, CassandraMutualizedQuotaModule.MODULE));
+    static CassandraClusterExtension cassandra = new CassandraClusterExtension(CassandraModule.aggregateModules(
+        UploadModule.MODULE, CassandraQuotaModule.MODULE));
 
-    private CassandraUploadUsageRepository cassandraUploadUsageRepository;
+    private CassandraUploadRepository uploadRepository;
+    private CassandraUploadUsageRepository uploadUsageRepository;
+    private UploadService testee;
 
     @BeforeEach
-    private void setup() {
-        cassandraUploadUsageRepository = new CassandraUploadUsageRepository(new CassandraQuotaCurrentValueDao(cassandraCluster.getCassandraCluster().getConf()));
-        resetCounterToZero();
+    void setUp(CassandraCluster cassandraCluster) {
+        Clock clock = Clock.systemUTC();
+        uploadRepository = new CassandraUploadRepository(new UploadDAO(cassandraCluster.getConf(), new HashBlobId.Factory()), new DeDuplicationBlobStore(new MemoryBlobStoreDAO(),
+            BucketName.of("default"), new HashBlobId.Factory()), clock);
+        uploadUsageRepository = new CassandraUploadUsageRepository(new CassandraQuotaCurrentValueDao(cassandraCluster.getConf()));
+        testee = new UploadServiceDefaultImpl(uploadRepository, uploadUsageRepository, UploadServiceContract.TEST_CONFIGURATION());
+    }
+
+    @Override
+    public UploadRepository uploadRepository() {
+        return uploadRepository;
     }
 
     @Override
     public UploadUsageRepository uploadUsageRepository() {
-        return cassandraUploadUsageRepository;
+        return uploadUsageRepository;
+    }
+
+    @Override
+    public UploadService testee() {
+        return testee;
     }
 }
