@@ -22,31 +22,23 @@ package org.apache.james.sieve.cassandra;
 import org.apache.james.backends.cassandra.CassandraCluster;
 import org.apache.james.backends.cassandra.CassandraClusterExtension;
 import org.apache.james.backends.cassandra.components.CassandraModule;
-import org.apache.james.backends.cassandra.components.CassandraMutualizedQuotaModule;
-import org.apache.james.backends.cassandra.components.CassandraQuotaCurrentValueDao;
-import org.apache.james.backends.cassandra.components.CassandraQuotaLimitDao;
-import org.apache.james.sieverepository.api.SieveRepository;
-import org.apache.james.sieverepository.lib.SieveRepositoryContract;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-class CassandraSieveRepositoryTest implements SieveRepositoryContract {
+class CassandraSieveQuotaDAOV1Test implements CassandraSieveQuotaDAOContract {
     @RegisterExtension
     static CassandraClusterExtension cassandraCluster = new CassandraClusterExtension(CassandraModule.aggregateModules(
-        CassandraSieveRepositoryModule.MODULE, CassandraMutualizedQuotaModule.MODULE));
+        CassandraSieveRepositoryModule.MODULE, CassandraSieveQuotaModule.MODULE));
 
-    SieveRepository sieveRepository;
+    private CassandraSieveQuotaDAOV1 sieveQuotaDAO;
 
     @BeforeEach
     void setUp(CassandraCluster cassandra) {
-        sieveRepository = new CassandraSieveRepository(
-            new CassandraSieveDAO(cassandra.getConf()),
-            new CassandraSieveQuotaDAOV2(new CassandraQuotaCurrentValueDao(cassandra.getConf()), new CassandraQuotaLimitDao(cassandra.getConf())),
-            new CassandraActiveScriptDAO(cassandra.getConf()));
+        sieveQuotaDAO = new CassandraSieveQuotaDAOV1(cassandra.getConf());
     }
 
     @Override
-    public SieveRepository sieveRepository() {
-        return sieveRepository;
+    public CassandraSieveQuotaDAO testee() {
+        return sieveQuotaDAO;
     }
 }

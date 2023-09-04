@@ -62,7 +62,6 @@ public class CassandraRecomputeCurrentQuotasServiceTest implements RecomputeCurr
     static CassandraClusterExtension cassandraCluster = new CassandraClusterExtension(CassandraModule.aggregateModules(
         MailboxAggregateModule.MODULE_WITH_QUOTA,
         CassandraDomainListModule.MODULE,
-        CassandraSieveRepositoryModule.MODULE,
         CassandraUsersRepositoryModule.MODULE));
 
     UsersRepositoryImpl usersRepository;
