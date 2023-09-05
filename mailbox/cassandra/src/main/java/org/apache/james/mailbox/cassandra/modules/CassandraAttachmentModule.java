@@ -27,8 +27,6 @@ import static com.datastax.oss.driver.api.querybuilder.SchemaBuilder.RowsPerPart
 
 import org.apache.james.backends.cassandra.components.CassandraModule;
 import org.apache.james.backends.cassandra.utils.CassandraConstants;
-import org.apache.james.mailbox.cassandra.table.CassandraAttachmentMessageIdTable;
-import org.apache.james.mailbox.cassandra.table.CassandraAttachmentOwnerTable;
 import org.apache.james.mailbox.cassandra.table.CassandraAttachmentV2Table;
 
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
@@ -49,24 +47,5 @@ public interface CassandraAttachmentModule {
             .withColumn(CassandraAttachmentV2Table.MESSAGE_ID, TIMEUUID)
             .withColumn(CassandraAttachmentV2Table.SIZE, BIGINT))
 
-        .table(CassandraAttachmentMessageIdTable.TABLE_NAME)
-        .comment("Holds ids of messages owning the attachment")
-        .options(options -> options
-            .withCompaction(SchemaBuilder.sizeTieredCompactionStrategy())
-            .withCaching(true, rows(CassandraConstants.DEFAULT_CACHED_ROW_PER_PARTITION)))
-        .statement(statement -> types -> statement
-            .withPartitionKey(CassandraAttachmentMessageIdTable.ATTACHMENT_ID_AS_UUID, UUID)
-            .withColumn(CassandraAttachmentMessageIdTable.ATTACHMENT_ID, TEXT)
-            .withClusteringColumn(CassandraAttachmentMessageIdTable.MESSAGE_ID, TEXT))
-
-        .table(CassandraAttachmentOwnerTable.TABLE_NAME)
-        .comment("Holds explicit owners of some attachments")
-        .options(options -> options
-            .withCompaction(SchemaBuilder.leveledCompactionStrategy())
-            .withBloomFilterFpChance(0.01)
-            .withCaching(true, rows(CassandraConstants.DEFAULT_CACHED_ROW_PER_PARTITION)))
-        .statement(statement -> types -> statement
-            .withPartitionKey(CassandraAttachmentOwnerTable.ID, UUID)
-            .withClusteringColumn(CassandraAttachmentOwnerTable.OWNER, TEXT))
         .build();
 }
