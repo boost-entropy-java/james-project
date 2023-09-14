@@ -164,7 +164,7 @@
                             <item name="SMTP Hook" href="/server/dev-extend-smtp-hook.html" />
                         </item>
                         <item name="Provided Extensions" href="/server/dev-provided.html" collapse="true" >
-                            <item name="Mailets" href="/server/dev-provided-mailets.html" />
+                            <item name="Mailets" href="/server/3/dev-provided-mailets.html" />
                             <item name="SMTP Hooks" href="/server/dev-provided-smtp-hooks.html" />
                         </item>
                     </item>
@@ -185,7 +185,6 @@
                 <item name="Crypto Mailets" href="/mailet/crypto/index.html"/>
                 <item name="Mailet AI" href="/mailet/ai/index.html"/>
                 <item name="MailetDocs" href="/mailet/mailetdocs-maven-plugin/index.html"/>
-                <item name="Mailing Lists" href="/mail.html#Mailet_API_List" />
                 <item name="Release Notes" href="/mailet/release-notes.html"/>
                 <item name="Java Docs" href="/mailet/apidocs"/>
                 <item name="Issue Tracker" href="https://issues.apache.org/jira/browse/MAILET" />
