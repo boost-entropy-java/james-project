@@ -17,28 +17,32 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.blob.cassandra.cache;
+package org.apache.james.mailbox.quota.task;
 
-import static org.apache.james.blob.cassandra.BlobTables.BlobStoreCache.DATA;
-import static org.apache.james.blob.cassandra.BlobTables.BlobStoreCache.ID;
-import static org.apache.james.blob.cassandra.BlobTables.BlobStoreCache.TABLE_NAME;
+import javax.inject.Inject;
 
-import org.apache.james.backends.cassandra.components.CassandraModule;
+import org.apache.james.core.Username;
+import org.apache.james.core.quota.QuotaComponent;
+import org.apache.james.sieverepository.api.SieveCurrentUploadUsageCalculator;
 
-import com.datastax.oss.driver.api.core.type.DataTypes;
-import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
+import reactor.core.publisher.Mono;
 
-public interface CassandraBlobCacheModule {
+public class RecomputeSieveUploadCurrentQuotasService implements RecomputeSingleComponentCurrentQuotasService {
 
-    CassandraModule MODULE = CassandraModule
-        .builder()
-        .table(TABLE_NAME)
-        .options(options -> options
-            .withCompaction(SchemaBuilder.sizeTieredCompactionStrategy())
-            .withCompression("LZ4Compressor", 8, 1.0))
-        .comment("Write through cache for small blobs stored in a slower blob store implementation.")
-        .statement(statement ->  types -> statement
-            .withPartitionKey(ID, DataTypes.TEXT)
-            .withColumn(DATA, DataTypes.BLOB))
-        .build();
+    private final SieveCurrentUploadUsageCalculator sieveCurrentUploadUsageCalculator;
+
+    @Inject
+    public RecomputeSieveUploadCurrentQuotasService(SieveCurrentUploadUsageCalculator sieveCurrentUploadUsageCalculator) {
+        this.sieveCurrentUploadUsageCalculator = sieveCurrentUploadUsageCalculator;
+    }
+
+    @Override
+    public QuotaComponent getQuotaComponent() {
+        return QuotaComponent.SIEVE;
+    }
+
+    @Override
+    public Mono<Void> recomputeCurrentQuotas(Username username) {
+        return sieveCurrentUploadUsageCalculator.recomputeCurrentUploadUsage(username);
+    }
 }

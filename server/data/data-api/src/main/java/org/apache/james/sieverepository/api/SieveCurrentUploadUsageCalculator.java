@@ -17,28 +17,27 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.blob.cassandra.cache;
+package org.apache.james.sieverepository.api;
 
-import static org.apache.james.blob.cassandra.BlobTables.BlobStoreCache.DATA;
-import static org.apache.james.blob.cassandra.BlobTables.BlobStoreCache.ID;
-import static org.apache.james.blob.cassandra.BlobTables.BlobStoreCache.TABLE_NAME;
+import javax.inject.Inject;
 
-import org.apache.james.backends.cassandra.components.CassandraModule;
+import org.apache.james.core.Username;
 
-import com.datastax.oss.driver.api.core.type.DataTypes;
-import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
+import reactor.core.publisher.Mono;
 
-public interface CassandraBlobCacheModule {
+public class SieveCurrentUploadUsageCalculator {
 
-    CassandraModule MODULE = CassandraModule
-        .builder()
-        .table(TABLE_NAME)
-        .options(options -> options
-            .withCompaction(SchemaBuilder.sizeTieredCompactionStrategy())
-            .withCompression("LZ4Compressor", 8, 1.0))
-        .comment("Write through cache for small blobs stored in a slower blob store implementation.")
-        .statement(statement ->  types -> statement
-            .withPartitionKey(ID, DataTypes.TEXT)
-            .withColumn(DATA, DataTypes.BLOB))
-        .build();
+    private final SieveRepository sieveRepository;
+
+    @Inject
+    public SieveCurrentUploadUsageCalculator(SieveRepository sieveRepository) {
+        this.sieveRepository = sieveRepository;
+    }
+
+    public Mono<Void> recomputeCurrentUploadUsage(Username username) {
+        return sieveRepository.listScriptsReactive(username)
+            .map(ScriptSummary::getSize)
+            .reduce(Long::sum)
+            .flatMap(sum -> sieveRepository.resetSpaceUsedReactive(username, sum));
+    }
 }

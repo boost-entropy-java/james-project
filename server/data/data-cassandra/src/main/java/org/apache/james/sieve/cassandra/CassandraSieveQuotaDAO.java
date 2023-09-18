@@ -42,4 +42,6 @@ public interface CassandraSieveQuotaDAO {
     Mono<Void> setQuota(Username username, QuotaSizeLimit quota);
 
     Mono<Void> removeQuota(Username username);
+
+    Mono<Void> resetSpaceUsed(Username username, long spaceUsed);
 }
