@@ -21,9 +21,12 @@ package org.apache.james.jmap.event;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -72,6 +75,8 @@ import org.apache.james.util.mime.MessageContentExtractor;
 import org.assertj.core.api.SoftAssertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import com.google.common.collect.ImmutableList;
 
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -133,7 +138,7 @@ class ComputeMessageFastViewProjectionListenerTest {
         mailboxManager = resources.getMailboxManager();
         messageIdManager = spy(resources.getMessageIdManager());
 
-        messageFastViewProjection = new MemoryMessageFastViewProjection(new RecordingMetricFactory());
+        messageFastViewProjection = spy(new MemoryMessageFastViewProjection(new RecordingMetricFactory()));
 
         MessageContentExtractor messageContentExtractor = new MessageContentExtractor();
         HtmlTextExtractor htmlTextExtractor = new JsoupHtmlTextExtractor();
@@ -231,6 +236,8 @@ class ComputeMessageFastViewProjectionListenerTest {
             softly.assertThat(Mono.from(messageFastViewProjection.retrieve(composedId2.getMessageId())).block())
                 .isEqualTo(PRECOMPUTED_PROPERTIES_EMPTY);
         });
+
+        verify(messageFastViewProjection, times(2)).store(any(), any());
     }
 
     @Test
@@ -262,6 +269,30 @@ class ComputeMessageFastViewProjectionListenerTest {
     }
 
     @Test
+    void shouldNotDuplicateStorePreviewWhenCopyingMessage() throws Exception {
+        MessageManager.AppendResult appendResult = inboxMessageManager.appendMessage(
+            MessageManager.AppendCommand.builder()
+                .build(previewMessage()),
+            mailboxSession);
+
+        mailboxManager.copyMessages(MessageRange.all(), BOB_INBOX_PATH, BOB_OTHER_BOX_PATH, mailboxSession);
+
+        verify(messageFastViewProjection, times(1)).store(eq(appendResult.getId().getMessageId()), any());
+    }
+
+    @Test
+    void shouldNotDuplicateStorePreviewWhenMovingMessage() throws Exception {
+        MessageManager.AppendResult appendResult = inboxMessageManager.appendMessage(
+            MessageManager.AppendCommand.builder()
+                .build(previewMessage()),
+            mailboxSession);
+
+        mailboxManager.moveMessages(MessageRange.all(), BOB_INBOX_PATH, BOB_OTHER_BOX_PATH, mailboxSession);
+
+        verify(messageFastViewProjection, times(1)).store(eq(appendResult.getId().getMessageId()), any());
+    }
+
+    @Test
     void shouldStoreEventInDeadLettersWhenComputeFastViewPrecomputedPropertiesException() throws Exception {
         doThrow(new IOException())
             .when(listener)
@@ -288,6 +319,52 @@ class ComputeMessageFastViewProjectionListenerTest {
 
         assertThat(eventDeadLetters.failedIds(ComputeMessageFastViewProjectionListener.GROUP).collectList().block())
             .hasSize(1);
+    }
+
+    @Test
+    void shouldDeletePreviewWhenMessageDeletedAndNoLongerReferenced() throws Exception {
+        ComposedMessageId composedId = inboxMessageManager.appendMessage(
+            MessageManager.AppendCommand.builder()
+                .build(ClassLoaderUtils.getSystemResourceAsSharedStream("fullMessage.eml")),
+            mailboxSession).getId();
+
+        assertThat(Mono.from(messageFastViewProjection.retrieve(composedId.getMessageId())).block())
+            .isNotNull();
+
+        inboxMessageManager.delete(ImmutableList.of(composedId.getUid()), mailboxSession);
+
+        assertThat(Mono.from(messageFastViewProjection.retrieve(composedId.getMessageId())).block())
+            .isNull();
+    }
+
+    @Test
+    void shouldKeepPreviewWhenExpungedAndStillReferenced() throws Exception {
+        ComposedMessageId composedId = inboxMessageManager.appendMessage(
+            MessageManager.AppendCommand.builder()
+                .build(ClassLoaderUtils.getSystemResourceAsSharedStream("fullMessage.eml")),
+            mailboxSession).getId();
+
+        mailboxManager.moveMessages(MessageRange.all(), BOB_INBOX_PATH, BOB_OTHER_BOX_PATH, mailboxSession);
+
+        assertThat(Mono.from(messageFastViewProjection.retrieve(composedId.getMessageId())).block())
+            .isNotNull();
+    }
+
+    @Test
+    void shouldKeepPreviewWhenMessageIdReferenceInCopied() throws Exception {
+        ComposedMessageId composedId = inboxMessageManager.appendMessage(
+            MessageManager.AppendCommand.builder()
+                .build(ClassLoaderUtils.getSystemResourceAsSharedStream("fullMessage.eml")),
+            mailboxSession).getId();
+
+        mailboxManager.copyMessages(MessageRange.all(), BOB_INBOX_PATH, BOB_OTHER_BOX_PATH, mailboxSession);
+        assertThat(Mono.from(messageFastViewProjection.retrieve(composedId.getMessageId())).block())
+            .isNotNull();
+
+        inboxMessageManager.delete(ImmutableList.of(composedId.getUid()), mailboxSession);
+
+        assertThat(Mono.from(messageFastViewProjection.retrieve(composedId.getMessageId())).block())
+            .isNotNull();
     }
 
     private Message previewMessage() throws Exception {
