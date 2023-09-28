@@ -32,6 +32,7 @@ import javax.persistence.Persistence;
 
 import org.apache.commons.configuration2.Configuration;
 import org.apache.commons.configuration2.ex.ConfigurationException;
+import org.apache.james.backends.jpa.JPAConfiguration;
 import org.apache.james.utils.PropertiesProvider;
 
 import com.google.common.base.Joiner;
@@ -65,9 +66,15 @@ public class JPAEntityManagerModule extends AbstractModule {
         properties.put(JPAConfiguration.JPA_CONNECTION_PROPERTIES, Joiner.on(",").join(connectionProperties));
         properties.putAll(jpaConfiguration.getCustomOpenjpaProperties());
 
-        if (jpaConfiguration.isMultithreaded().isPresent()) {
-            properties.put(JPAConfiguration.JPA_MULTITHREADED, jpaConfiguration.isMultithreaded().get().toString());
-        }
+        jpaConfiguration.isMultithreaded()
+            .ifPresent(isMultiThread ->
+                properties.put(JPAConfiguration.JPA_MULTITHREADED, jpaConfiguration.isMultithreaded().toString())
+            );
+
+        jpaConfiguration.isAttachmentStorageEnabled()
+            .ifPresent(isMultiThread ->
+                properties.put(JPAConfiguration.ATTACHMENT_STORAGE, jpaConfiguration.isAttachmentStorageEnabled().toString())
+            );
 
         return Persistence.createEntityManagerFactory("Global", properties);
     }
@@ -79,7 +86,6 @@ public class JPAEntityManagerModule extends AbstractModule {
 
         Map<String, String> openjpaProperties = getKeysForPrefix(dataSource, "openjpa", false);
         Map<String, String> datasourceProperties = getKeysForPrefix(dataSource, "datasource", true);
-
 
         return JPAConfiguration.builder()
                 .driverName(dataSource.getString("database.driverClassName"))
@@ -93,6 +99,7 @@ public class JPAEntityManagerModule extends AbstractModule {
                 .password(dataSource.getString("database.password"))
                 .setCustomOpenjpaProperties(openjpaProperties)
                 .setCustomDatasourceProperties(datasourceProperties)
+                .attachmentStorage(dataSource.getBoolean(JPAConfiguration.ATTACHMENT_STORAGE, false))
                 .build();
     }
 

@@ -24,8 +24,10 @@ import javax.persistence.EntityManagerFactory;
 
 import org.apache.commons.lang3.NotImplementedException;
 import org.apache.james.backends.jpa.EntityManagerUtils;
+import org.apache.james.backends.jpa.JPAConfiguration;
 import org.apache.james.mailbox.MailboxSession;
 import org.apache.james.mailbox.jpa.mail.JPAAnnotationMapper;
+import org.apache.james.mailbox.jpa.mail.JPAAttachmentMapper;
 import org.apache.james.mailbox.jpa.mail.JPAMailboxMapper;
 import org.apache.james.mailbox.jpa.mail.JPAMessageMapper;
 import org.apache.james.mailbox.jpa.mail.JPAModSeqProvider;
@@ -33,6 +35,8 @@ import org.apache.james.mailbox.jpa.mail.JPAUidProvider;
 import org.apache.james.mailbox.jpa.user.JPASubscriptionMapper;
 import org.apache.james.mailbox.store.MailboxSessionMapperFactory;
 import org.apache.james.mailbox.store.mail.AnnotationMapper;
+import org.apache.james.mailbox.store.mail.AttachmentMapper;
+import org.apache.james.mailbox.store.mail.AttachmentMapperFactory;
 import org.apache.james.mailbox.store.mail.MailboxMapper;
 import org.apache.james.mailbox.store.mail.MessageIdMapper;
 import org.apache.james.mailbox.store.mail.MessageMapper;
@@ -44,20 +48,25 @@ import org.apache.james.mailbox.store.user.SubscriptionMapper;
  * JPA implementation of {@link MailboxSessionMapperFactory}
  *
  */
-public class JPAMailboxSessionMapperFactory extends MailboxSessionMapperFactory {
+public class JPAMailboxSessionMapperFactory extends MailboxSessionMapperFactory implements AttachmentMapperFactory {
 
     private final EntityManagerFactory entityManagerFactory;
     private final JPAUidProvider uidProvider;
     private final JPAModSeqProvider modSeqProvider;
+    private final AttachmentMapper attachmentMapper;
+    private final JPAConfiguration jpaConfiguration;
 
     @Inject
-    public JPAMailboxSessionMapperFactory(EntityManagerFactory entityManagerFactory, JPAUidProvider uidProvider, JPAModSeqProvider modSeqProvider) {
+    public JPAMailboxSessionMapperFactory(EntityManagerFactory entityManagerFactory, JPAUidProvider uidProvider,
+                                          JPAModSeqProvider modSeqProvider, JPAConfiguration jpaConfiguration) {
         this.entityManagerFactory = entityManagerFactory;
         this.uidProvider = uidProvider;
         this.modSeqProvider = modSeqProvider;
         EntityManagerUtils.safelyClose(createEntityManager());
+        this.attachmentMapper = new JPAAttachmentMapper(entityManagerFactory);
+        this.jpaConfiguration = jpaConfiguration;
     }
-    
+
     @Override
     public MailboxMapper createMailboxMapper(MailboxSession session) {
         return new JPAMailboxMapper(entityManagerFactory);
@@ -65,7 +74,7 @@ public class JPAMailboxSessionMapperFactory extends MailboxSessionMapperFactory 
 
     @Override
     public MessageMapper createMessageMapper(MailboxSession session) {
-        return new JPAMessageMapper(uidProvider, modSeqProvider, entityManagerFactory);
+        return new JPAMessageMapper(uidProvider, modSeqProvider, entityManagerFactory, jpaConfiguration);
     }
 
     @Override
@@ -100,6 +109,16 @@ public class JPAMailboxSessionMapperFactory extends MailboxSessionMapperFactory 
     @Override
     public ModSeqProvider getModSeqProvider() {
         return modSeqProvider;
+    }
+
+    @Override
+    public AttachmentMapper createAttachmentMapper(MailboxSession session) {
+        return new JPAAttachmentMapper(entityManagerFactory);
+    }
+
+    @Override
+    public AttachmentMapper getAttachmentMapper(MailboxSession session) {
+        return attachmentMapper;
     }
 
 }

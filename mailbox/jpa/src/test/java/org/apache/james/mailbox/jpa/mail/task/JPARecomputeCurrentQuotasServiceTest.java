@@ -22,6 +22,7 @@ package org.apache.james.mailbox.jpa.mail.task;
 import javax.persistence.EntityManagerFactory;
 
 import org.apache.commons.configuration2.BaseHierarchicalConfiguration;
+import org.apache.james.backends.jpa.JPAConfiguration;
 import org.apache.james.backends.jpa.JpaTestCluster;
 import org.apache.james.domainlist.api.DomainList;
 import org.apache.james.domainlist.jpa.model.JPADomain;
@@ -71,9 +72,16 @@ class JPARecomputeCurrentQuotasServiceTest implements RecomputeCurrentQuotasServ
     @BeforeEach
     void setUp() throws Exception {
         EntityManagerFactory entityManagerFactory = JPA_TEST_CLUSTER.getEntityManagerFactory();
+
+        JPAConfiguration jpaConfiguration = JPAConfiguration.builder()
+            .driverName("driverName")
+            .driverURL("driverUrl")
+            .build();
+
         JPAMailboxSessionMapperFactory mapperFactory = new JPAMailboxSessionMapperFactory(entityManagerFactory,
             new JPAUidProvider(entityManagerFactory),
-            new JPAModSeqProvider(entityManagerFactory));
+            new JPAModSeqProvider(entityManagerFactory),
+            jpaConfiguration);
 
         usersRepository = new JPAUsersRepository(NO_DOMAIN_LIST);
         usersRepository.setEntityManagerFactory(JPA_TEST_CLUSTER.getEntityManagerFactory());

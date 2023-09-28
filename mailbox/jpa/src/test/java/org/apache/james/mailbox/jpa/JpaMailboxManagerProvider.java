@@ -23,6 +23,7 @@ import java.time.Instant;
 
 import javax.persistence.EntityManagerFactory;
 
+import org.apache.james.backends.jpa.JPAConfiguration;
 import org.apache.james.backends.jpa.JpaTestCluster;
 import org.apache.james.events.EventBusTestFixture;
 import org.apache.james.events.InVMEventBus;
@@ -55,7 +56,14 @@ public class JpaMailboxManagerProvider {
 
     public static OpenJPAMailboxManager provideMailboxManager(JpaTestCluster jpaTestCluster) {
         EntityManagerFactory entityManagerFactory = jpaTestCluster.getEntityManagerFactory();
-        JPAMailboxSessionMapperFactory mf = new JPAMailboxSessionMapperFactory(entityManagerFactory, new JPAUidProvider(entityManagerFactory), new JPAModSeqProvider(entityManagerFactory));
+
+        JPAConfiguration jpaConfiguration = JPAConfiguration.builder()
+            .driverName("driverName")
+            .driverURL("driverUrl")
+            .attachmentStorage(true)
+            .build();
+
+        JPAMailboxSessionMapperFactory mf = new JPAMailboxSessionMapperFactory(entityManagerFactory, new JPAUidProvider(entityManagerFactory), new JPAModSeqProvider(entityManagerFactory), jpaConfiguration);
 
         MailboxACLResolver aclResolver = new UnionMailboxACLResolver();
         MessageParser messageParser = new MessageParser();

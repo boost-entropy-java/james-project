@@ -25,6 +25,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import javax.persistence.EntityManagerFactory;
 
 import org.apache.commons.lang3.NotImplementedException;
+import org.apache.james.backends.jpa.JPAConfiguration;
 import org.apache.james.backends.jpa.JpaTestCluster;
 import org.apache.james.mailbox.MessageUid;
 import org.apache.james.mailbox.ModSeq;
@@ -59,16 +60,23 @@ public class JPAMapperProvider implements MapperProvider {
     public MessageMapper createMessageMapper() {
         EntityManagerFactory entityManagerFactory = jpaTestCluster.getEntityManagerFactory();
 
+        JPAConfiguration jpaConfiguration = JPAConfiguration.builder()
+            .driverName("driverName")
+            .driverURL("driverUrl")
+            .attachmentStorage(true)
+            .build();
+
         JPAMessageMapper messageMapper = new JPAMessageMapper(new JPAUidProvider(entityManagerFactory),
             new JPAModSeqProvider(entityManagerFactory),
-            entityManagerFactory);
+            entityManagerFactory,
+            jpaConfiguration);
 
         return new TransactionalMessageMapper(messageMapper);
     }
 
     @Override
     public AttachmentMapper createAttachmentMapper() throws MailboxException {
-        throw new NotImplementedException("not implemented");
+        return new TransactionalAttachmentMapper(new JPAAttachmentMapper(jpaTestCluster.getEntityManagerFactory()));
     }
 
     @Override
@@ -88,7 +96,7 @@ public class JPAMapperProvider implements MapperProvider {
 
     @Override
     public List<Capabilities> getSupportedCapabilities() {
-        return ImmutableList.of(Capabilities.ANNOTATION, Capabilities.MAILBOX, Capabilities.MESSAGE, Capabilities.MOVE);
+        return ImmutableList.of(Capabilities.ANNOTATION, Capabilities.MAILBOX, Capabilities.MESSAGE, Capabilities.MOVE, Capabilities.ATTACHMENT);
     }
 
     @Override
