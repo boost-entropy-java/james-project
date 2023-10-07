@@ -31,6 +31,7 @@ import javax.mail.internet.MimeMessage;
 import org.apache.james.core.MailAddress;
 import org.apache.james.lifecycle.api.LifecycleUtil;
 import org.apache.james.server.core.MailImpl;
+import org.apache.james.util.AuditTrail;
 import org.apache.mailet.Mail;
 import org.apache.mailet.MailetContext;
 import org.apache.mailet.PerRecipientHeaders.Header;
@@ -168,6 +169,16 @@ public class MailDispatcher {
                     Throwing.function(any -> {
                         addSpecificHeadersForRecipient(mail, message, recipient);
                         return storeMailWithRetry(mail, recipient)
+                            .doOnSuccess(Throwing.consumer(success -> AuditTrail.entry()
+                                .protocol("mailetcontainer")
+                                .action("LocalDelivery")
+                                .parameters(Throwing.supplier(() -> ImmutableMap.of("mailId", mail.getName(),
+                                    "mimeMessageId", Optional.ofNullable(mail.getMessage())
+                                        .map(Throwing.function(MimeMessage::getMessageID))
+                                        .orElse(""),
+                                    "sender", mail.getMaybeSender().asString(),
+                                    "recipient", recipient.asString())))
+                                .log("Local delivered mail.")))
                             .then(Mono.<MailAddress>empty());
                     }),
                     Throwing.consumer(savedHeaders -> restoreHeaders(mail.getMessage(), savedHeaders)))

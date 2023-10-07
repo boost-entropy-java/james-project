@@ -51,12 +51,14 @@ import org.apache.james.protocols.smtp.hook.HookResult;
 import org.apache.james.protocols.smtp.hook.HookResultHook;
 import org.apache.james.protocols.smtp.hook.HookReturnCode;
 import org.apache.james.protocols.smtp.hook.MailParametersHook;
+import org.apache.james.util.AuditTrail;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 
 
@@ -387,6 +389,15 @@ public class AuthCmdHandler
                     } else if (SMTPRetCode.AUTH_OK.equals(res.getRetCode())) {
                         // TODO: Make this string a more useful debug message
                         AUTHENTICATION_DEDICATED_LOGGER.debug("AUTH method {} succeeded", authType);
+
+                        AuditTrail.entry()
+                            .username(username::asString)
+                            .remoteIP(() -> Optional.ofNullable(session.getRemoteAddress()))
+                            .sessionId(session::getSessionID)
+                            .protocol("SMTP")
+                            .action("AUTH")
+                            .parameters(() -> ImmutableMap.of("authType", authType))
+                            .log("SMTP Authentication succeeded.");
                     }
                     return res;
                 }
@@ -395,6 +406,15 @@ public class AuthCmdHandler
 
         res = AUTH_FAILED;
         AUTHENTICATION_DEDICATED_LOGGER.info("AUTH method {} failed from {}@{}", authType, username, session.getRemoteAddress().getAddress().getHostAddress());
+
+        AuditTrail.entry()
+            .username(username::asString)
+            .remoteIP(() -> Optional.ofNullable(session.getRemoteAddress()))
+            .protocol("SMTP")
+            .action("AUTH")
+            .parameters(() -> ImmutableMap.of("authType", authType))
+            .log("SMTP Authentication failed.");
+
         return res;
     }
 

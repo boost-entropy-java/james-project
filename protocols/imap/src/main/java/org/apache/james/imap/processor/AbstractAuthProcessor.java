@@ -38,10 +38,12 @@ import org.apache.james.mailbox.exception.UserDoesNotExistException;
 import org.apache.james.mailbox.model.MailboxConstants;
 import org.apache.james.mailbox.model.MailboxPath;
 import org.apache.james.metrics.api.MetricFactory;
+import org.apache.james.util.AuditTrail;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableMap;
 
 import reactor.core.publisher.Mono;
 
@@ -87,11 +89,22 @@ public abstract class AbstractAuthProcessor<R extends ImapRequest> extends Abstr
                     session.authenticated();
                     session.setMailboxSession(mailboxSession);
                     provisionInbox(session, mailboxManager, mailboxSession);
+                    AuditTrail.entry()
+                        .username(() -> mailboxSession.getUser().asString())
+                        .sessionId(() -> session.sessionId().asString())
+                        .protocol("IMAP")
+                        .action("AUTH")
+                        .log("IMAP Authentication succeeded.");
                     okComplete(request, responder);
                     responder.flush();
                     session.stopDetectingCommandInjection();
                 } catch (BadCredentialsException e) {
                     authFailure = true;
+                    AuditTrail.entry()
+                        .username(() -> authenticationAttempt.getAuthenticationId().asString())
+                        .protocol("IMAP")
+                        .action("AUTH")
+                        .log("IMAP Authentication failed because of bad credentials.");
                 }
             }
             if (authFailure) {
@@ -116,25 +129,48 @@ public abstract class AbstractAuthProcessor<R extends ImapRequest> extends Abstr
                 .authenticate(givenUser, authenticationAttempt.getPassword())
                 .as(otherUser),
             session,
-            request, responder);
+            request, responder,
+            givenUser, otherUser);
     }
 
     protected void doAuthWithDelegation(MailboxSessionAuthWithDelegationSupplier mailboxSessionSupplier,
-                                        ImapSession session, ImapRequest request, Responder responder) {
+                                        ImapSession session, ImapRequest request, Responder responder,
+                                        Username authenticateUser, Username delegatorUser) {
         try {
             final MailboxManager mailboxManager = getMailboxManager();
             final MailboxSession mailboxSession = mailboxSessionSupplier.get();
             session.authenticated();
             session.setMailboxSession(mailboxSession);
+            AuditTrail.entry()
+                .username(() -> mailboxSession.getLoggedInUser()
+                    .map(Username::asString)
+                    .orElse(""))
+                .sessionId(() -> session.sessionId().asString())
+                .protocol("IMAP")
+                .action("AUTH")
+                .parameters(() -> ImmutableMap.of("delegatorUser", mailboxSession.getUser().asString()))
+                .log("IMAP Authentication with delegation succeeded.");
             okComplete(request, responder);
             provisionInbox(session, mailboxManager, mailboxSession);
         } catch (BadCredentialsException e) {
+            AuditTrail.entry()
+                .username(authenticateUser::asString)
+                .protocol("IMAP")
+                .action("AUTH")
+                .parameters(() -> ImmutableMap.of("delegatorUser", delegatorUser.asString()))
+                .log("IMAP Authentication with delegation failed because of bad credentials.");
             manageFailureCount(session, request, responder);
         } catch (UserDoesNotExistException e) {
             LOGGER.info("User does not exist", e);
             no(request, responder, HumanReadableText.USER_DOES_NOT_EXIST);
         } catch (ForbiddenDelegationException e) {
             LOGGER.info("Delegate forbidden", e);
+            AuditTrail.entry()
+                .username(authenticateUser::asString)
+                .protocol("IMAP")
+                .action("AUTH")
+                .parameters(() -> ImmutableMap.of("delegatorUser", delegatorUser.asString()))
+                .log("IMAP Authentication with delegation failed because of non existing delegation.");
             no(request, responder, HumanReadableText.DELEGATION_FORBIDDEN);
         } catch (MailboxException e) {
             LOGGER.info("Login failed", e);

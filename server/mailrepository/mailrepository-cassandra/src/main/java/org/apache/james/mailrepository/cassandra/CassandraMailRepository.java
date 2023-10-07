@@ -29,6 +29,7 @@ import javax.inject.Inject;
 import javax.mail.MessagingException;
 import javax.mail.internet.MimeMessage;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.james.blob.api.Store;
 import org.apache.james.blob.mail.MimeMessagePartsId;
 import org.apache.james.blob.mail.MimeMessageStore;
@@ -38,10 +39,12 @@ import org.apache.james.mailrepository.api.MailRepositoryUrl;
 import org.apache.james.mailrepository.cassandra.CassandraMailRepositoryMailDaoV2.MailDTO;
 import org.apache.james.server.core.MailImpl;
 import org.apache.james.server.core.MimeMessageWrapper;
+import org.apache.james.util.AuditTrail;
 import org.apache.mailet.Mail;
 import org.reactivestreams.Publisher;
 
 import com.github.fge.lambdas.Throwing;
+import com.google.common.collect.ImmutableMap;
 
 import reactor.core.publisher.Mono;
 
@@ -71,6 +74,16 @@ public class CassandraMailRepository implements MailRepository {
                 parts.getHeaderBlobId(),
                 parts.getBodyBlobId()))
             .then(keysDAO.store(url, mailKey))
+            .doOnSuccess(Throwing.consumer(any -> AuditTrail.entry()
+                .protocol("mailrepository")
+                .action("store")
+                .parameters(Throwing.supplier(() -> ImmutableMap.of("mailId", mail.getName(),
+                    "mimeMessageId", Optional.ofNullable(mail.getMessage())
+                        .map(Throwing.function(MimeMessage::getMessageID))
+                        .orElse(""),
+                    "sender", mail.getMaybeSender().asString(),
+                    "recipients", StringUtils.join(mail.getRecipients()))))
+                .log("CassandraMailRepository stored mail.")))
             .thenReturn(mailKey)
             .block();
     }

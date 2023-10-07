@@ -26,6 +26,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -38,6 +39,7 @@ import javax.mail.internet.MimeMessage;
 import org.apache.commons.configuration2.BaseHierarchicalConfiguration;
 import org.apache.commons.configuration2.HierarchicalConfiguration;
 import org.apache.commons.configuration2.tree.ImmutableNode;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.james.filesystem.api.FileSystem;
 import org.apache.james.lifecycle.api.Configurable;
 import org.apache.james.mailrepository.api.Initializable;
@@ -46,11 +48,13 @@ import org.apache.james.mailrepository.api.MailRepository;
 import org.apache.james.repository.file.FilePersistentObjectRepository;
 import org.apache.james.repository.file.FilePersistentStreamRepository;
 import org.apache.james.server.core.MimeMessageWrapper;
+import org.apache.james.util.AuditTrail;
 import org.apache.mailet.Mail;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.github.fge.lambdas.Throwing;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterators;
 
 /**
@@ -182,6 +186,18 @@ public class FileMailRepository implements MailRepository, Configurable, Initial
                 }
             }
             internalStore(mc);
+
+            AuditTrail.entry()
+                .protocol("mailrepository")
+                .action("store")
+                .parameters(Throwing.supplier(() -> ImmutableMap.of("mailId", mc.getName(),
+                    "mimeMessageId", Optional.ofNullable(mc.getMessage())
+                        .map(Throwing.function(MimeMessage::getMessageID))
+                        .orElse(""),
+                    "sender", mc.getMaybeSender().asString(),
+                    "recipients", StringUtils.join(mc.getRecipients()))))
+                .log("FileMailRepository stored mail.");
+
             return key;
         } catch (MessagingException e) {
             LOGGER.error("Exception caught while storing mail {}", key, e);

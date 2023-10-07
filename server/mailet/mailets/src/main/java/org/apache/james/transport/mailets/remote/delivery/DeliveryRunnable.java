@@ -24,8 +24,13 @@ import static org.apache.james.transport.mailets.remote.delivery.Bouncer.IS_DELI
 import java.io.Closeable;
 import java.time.Duration;
 import java.util.Date;
+import java.util.Optional;
 import java.util.function.Supplier;
 
+import javax.mail.MessagingException;
+import javax.mail.internet.MimeMessage;
+
+import org.apache.commons.lang3.StringUtils;
 import org.apache.james.dnsservice.api.DNSService;
 import org.apache.james.lifecycle.api.LifecycleUtil;
 import org.apache.james.metrics.api.Metric;
@@ -33,6 +38,7 @@ import org.apache.james.metrics.api.MetricFactory;
 import org.apache.james.metrics.api.TimeMetric;
 import org.apache.james.queue.api.MailPrioritySupport;
 import org.apache.james.queue.api.MailQueue;
+import org.apache.james.util.AuditTrail;
 import org.apache.james.util.MDCBuilder;
 import org.apache.mailet.Attribute;
 import org.apache.mailet.AttributeValue;
@@ -44,6 +50,7 @@ import org.slf4j.LoggerFactory;
 import com.github.fge.lambdas.Throwing;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
@@ -128,6 +135,17 @@ public class DeliveryRunnable implements Disposable {
                     // DO NOT CHANGE THIS to catch Error!
                     // For example, if there were an OutOfMemory condition caused because
                     // something else in the server was abusing memory, we would not want to start purging the retrying spool!
+                    AuditTrail.entry()
+                        .protocol("mailetcontainer")
+                        .action("RemoteDelivery")
+                        .parameters(Throwing.supplier(() -> ImmutableMap.of("mailId", mail.getName(),
+                            "mimeMessageId", Optional.ofNullable(mail.getMessage())
+                                .map(Throwing.function(MimeMessage::getMessageID))
+                                .orElse(""),
+                            "sender", mail.getMaybeSender().asString(),
+                            "recipients", StringUtils.join(mail.getRecipients()))))
+                        .log("Remote delivering mail failed temporarily.");
+
                     queueItem.done(MailQueue.MailQueueItem.CompletionStatus.RETRY);
                 } catch (Exception ex) {
                     sink.error(ex);
@@ -141,18 +159,48 @@ public class DeliveryRunnable implements Disposable {
     }
 
     @VisibleForTesting
-    void attemptDelivery(Mail mail) throws MailQueue.MailQueueException {
+    void attemptDelivery(Mail mail) throws MessagingException {
         ExecutionResult executionResult = mailDelivrer.deliver(mail);
         switch (executionResult.getExecutionState()) {
             case SUCCESS:
                 outgoingMailsMetric.increment();
                 configuration.getOnSuccess()
                     .ifPresent(Throwing.consumer(onSuccess -> mailetContext.sendMail(mail, onSuccess.getValue())));
+                AuditTrail.entry()
+                    .protocol("mailetcontainer")
+                    .action("RemoteDelivery")
+                    .parameters(Throwing.supplier(() -> ImmutableMap.of("mailId", mail.getName(),
+                        "mimeMessageId", Optional.ofNullable(mail.getMessage())
+                            .map(Throwing.function(MimeMessage::getMessageID))
+                            .orElse(""),
+                        "sender", mail.getMaybeSender().asString(),
+                        "recipients", StringUtils.join(mail.getRecipients()))))
+                    .log("Remote delivering mail succeeded.");
                 break;
             case TEMPORARY_FAILURE:
+                AuditTrail.entry()
+                    .protocol("mailetcontainer")
+                    .action("RemoteDelivery")
+                    .parameters(Throwing.supplier(() -> ImmutableMap.of("mailId", mail.getName(),
+                        "mimeMessageId", Optional.ofNullable(mail.getMessage())
+                            .map(Throwing.function(MimeMessage::getMessageID))
+                            .orElse(""),
+                        "sender", mail.getMaybeSender().asString(),
+                        "recipients", StringUtils.join(mail.getRecipients()))))
+                    .log("Remote delivering mail failed temporarily.");
                 handleTemporaryFailure(mail, executionResult);
                 break;
             case PERMANENT_FAILURE:
+                AuditTrail.entry()
+                    .protocol("mailetcontainer")
+                    .action("RemoteDelivery")
+                    .parameters(Throwing.supplier(() -> ImmutableMap.of("mailId", mail.getName(),
+                        "mimeMessageId", Optional.ofNullable(mail.getMessage())
+                            .map(Throwing.function(MimeMessage::getMessageID))
+                            .orElse(""),
+                        "sender", mail.getMaybeSender().asString(),
+                        "recipients", StringUtils.join(mail.getRecipients()))))
+                    .log("Remote delivering mail failed permanently.");
                 handlePermanentFailure(mail, executionResult);
                 break;
         }
@@ -163,7 +211,7 @@ public class DeliveryRunnable implements Disposable {
         bouncer.bounce(mail, executionResult.getException().orElse(null));
     }
 
-    private void handleTemporaryFailure(Mail mail, ExecutionResult executionResult) throws MailQueue.MailQueueException {
+    private void handleTemporaryFailure(Mail mail, ExecutionResult executionResult) throws MessagingException {
         if (!mail.getState().equals(Mail.ERROR)) {
             mail.setState(Mail.ERROR);
             DeliveryRetriesHelper.initRetries(mail);
@@ -177,6 +225,16 @@ public class DeliveryRunnable implements Disposable {
         } else {
             LOGGER.debug("Bouncing message {} after {} retries", mail.getName(), retries);
             bouncer.bounce(mail, new Exception("Too many retries failure. Bouncing after " + retries + " retries.", executionResult.getException().orElse(null)));
+            AuditTrail.entry()
+                .protocol("mailetcontainer")
+                .action("RemoteDelivery")
+                .parameters(Throwing.supplier(() -> ImmutableMap.of("mailId", mail.getName(),
+                    "mimeMessageId", Optional.ofNullable(mail.getMessage())
+                        .map(Throwing.function(MimeMessage::getMessageID))
+                        .orElse(""),
+                    "sender", mail.getMaybeSender().asString(),
+                    "recipients", StringUtils.join(mail.getRecipients()))))
+                .log("Remote delivering mail failed after maximum retries.");
         }
     }
 
