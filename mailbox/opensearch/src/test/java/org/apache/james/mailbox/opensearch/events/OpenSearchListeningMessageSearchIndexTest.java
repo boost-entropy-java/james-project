@@ -32,6 +32,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.Date;
+import java.util.Optional;
 
 import javax.mail.Flags;
 
@@ -72,6 +73,7 @@ import org.apache.james.mailbox.opensearch.IndexHeaders;
 import org.apache.james.mailbox.opensearch.MailboxIdRoutingKeyFactory;
 import org.apache.james.mailbox.opensearch.MailboxIndexCreationUtil;
 import org.apache.james.mailbox.opensearch.MailboxOpenSearchConstants;
+import org.apache.james.mailbox.opensearch.OpenSearchMailboxConfiguration;
 import org.apache.james.mailbox.opensearch.json.MessageToOpenSearchJson;
 import org.apache.james.mailbox.opensearch.query.CriterionConverter;
 import org.apache.james.mailbox.opensearch.query.QueryConverter;
@@ -85,6 +87,7 @@ import org.apache.james.mailbox.store.mail.model.impl.PropertyBuilder;
 import org.apache.james.mailbox.store.mail.model.impl.SimpleMailboxMessage;
 import org.apache.james.mailbox.store.search.ListeningMessageSearchIndex;
 import org.apache.james.mailbox.store.search.ListeningMessageSearchIndexContract;
+import org.apache.james.metrics.tests.RecordingMetricFactory;
 import org.apache.james.utils.UpdatableTickingClock;
 import org.awaitility.Awaitility;
 import org.awaitility.Durations;
@@ -214,7 +217,8 @@ class OpenSearchListeningMessageSearchIndexTest {
         
         testee = new OpenSearchListeningMessageSearchIndex(mapperFactory,
             ImmutableSet.of(), openSearchIndexer, openSearchSearcher,
-            messageToOpenSearchJson, sessionProvider, new MailboxIdRoutingKeyFactory(), messageIdFactory);
+            messageToOpenSearchJson, sessionProvider, new MailboxIdRoutingKeyFactory(), messageIdFactory,
+            OpenSearchMailboxConfiguration.builder().build(), new RecordingMetricFactory());
         session = sessionProvider.createSystemSession(USERNAME);
 
         mailbox = mapperFactory.getMailboxMapper(session).create(MailboxPath.forUser(USERNAME, DefaultMailboxes.INBOX), UidValidity.generate()).block();
@@ -280,7 +284,8 @@ class OpenSearchListeningMessageSearchIndexTest {
 
         testee = new OpenSearchListeningMessageSearchIndex(mapperFactory,
             ImmutableSet.of(), openSearchIndexer, openSearchSearcher,
-            messageToOpenSearchJson, sessionProvider, new MailboxIdRoutingKeyFactory(), new InMemoryMessageId.Factory());
+            messageToOpenSearchJson, sessionProvider, new MailboxIdRoutingKeyFactory(), new InMemoryMessageId.Factory(),
+            OpenSearchMailboxConfiguration.builder().build(), new RecordingMetricFactory());
 
         testee.add(session, mailbox, MESSAGE_WITH_ATTACHMENT).block();
         awaitForOpenSearch(QueryBuilders.matchAll().build()._toQuery(), 1L);
@@ -339,7 +344,7 @@ class OpenSearchListeningMessageSearchIndexTest {
             outbox.getMailboxId(),
             ImmutableSortedMap.of(MESSAGE_UID_1, outdatedMessageMetaData),
             Event.EventId.random(),
-            !IS_DELIVERY, IS_APPENDED);
+            !IS_DELIVERY, IS_APPENDED, Optional.empty());
 
         Mono.from(testee.reactiveEvent(addedOutDatedEvent)).block();
 
