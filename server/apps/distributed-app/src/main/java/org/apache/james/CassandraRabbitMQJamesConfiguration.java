@@ -162,9 +162,11 @@ public class CassandraRabbitMQJamesConfiguration implements Configuration {
 
             VaultConfiguration vaultConfiguration = this.vaultConfiguration.orElseGet(() -> {
                 try {
-                    return VaultConfiguration.from(configurationProvider.getConfiguration("deletedMessageVault"));
-                } catch (ConfigurationException e) {
+                    return VaultConfiguration.from(propertiesProvider.getConfiguration("deletedMessageVault"));
+                } catch (FileNotFoundException e) {
                     return VaultConfiguration.DEFAULT;
+                } catch (ConfigurationException e) {
+                    throw new RuntimeException(e);
                 }
             });
 
@@ -180,9 +182,11 @@ public class CassandraRabbitMQJamesConfiguration implements Configuration {
 
             boolean quotaCompatibilityMode = this.quotaCompatibilityMode.orElseGet(() -> {
                 try {
-                    return configurationProvider.getConfiguration("cassandra").getBoolean("quota.compatibility.mode", false);
-                } catch (ConfigurationException e) {
+                    return propertiesProvider.getConfiguration("cassandra").getBoolean("quota.compatibility.mode", false);
+                } catch (FileNotFoundException e) {
                     return false;
+                } catch (ConfigurationException e) {
+                    throw new RuntimeException(e);
                 }
             });
 

@@ -34,6 +34,7 @@ import org.apache.james.domainlist.api.DomainList;
 import org.apache.james.domainlist.api.mock.SimpleDomainList;
 import org.apache.james.mailbox.cassandra.mail.utils.GuiceUtils;
 import org.apache.james.mailbox.cassandra.modules.CassandraMailboxQuotaModule;
+import org.apache.james.mailbox.cassandra.quota.migration.CassandraPerUserMaxQuotaManagerMigration;
 import org.apache.james.mailbox.model.QuotaRoot;
 import org.apache.james.mailbox.quota.MaxQuotaManager;
 import org.apache.james.mailbox.quota.UserQuotaRootResolver;
@@ -127,6 +128,7 @@ public class CassandraPerUserMaxQuotaManagerMigrationTest {
 
     @Test
     void shouldNotFailWhenNoUserLimit() throws Exception {
+        usersRepository.addUser(USERNAME, "1");
         migration.apply();
         assertThat(newMaxQuotaManager.getMaxMessage(QUOTA_ROOT)).isEmpty();
         assertThat(newMaxQuotaManager.getMaxStorage(QUOTA_ROOT)).isEmpty();

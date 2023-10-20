@@ -17,7 +17,7 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.mailbox.cassandra.quota;
+package org.apache.james.mailbox.cassandra.quota.migration;
 
 import java.util.List;
 
@@ -50,7 +50,7 @@ public class CassandraPerUserMaxQuotaManagerMigration implements Migration {
 
     @Inject
     public CassandraPerUserMaxQuotaManagerMigration(UsersRepository usersRepository, DomainList domainDao,
-                                                    @Named("old") MaxQuotaManager oldMaxQuotaManager, MaxQuotaManager newMaxQuotaManager,
+                                                    @Named("old") MaxQuotaManager oldMaxQuotaManager, @Named("new")  MaxQuotaManager newMaxQuotaManager,
                                                     UserQuotaRootResolver userQuotaRootResolver) {
         this.usersRepository = usersRepository;
         this.domainDao = domainDao;
@@ -85,9 +85,11 @@ public class CassandraPerUserMaxQuotaManagerMigration implements Migration {
 
     private Mono<Void> migrateUserQuotaLimit(QuotaRoot quotaRoot) {
         return Mono.from(oldMaxQuotaManager.listMaxMessagesDetailsReactive(quotaRoot))
+            .filter(map -> map.containsKey(Quota.Scope.User))
             .map(map -> map.get(Quota.Scope.User))
             .flatMap(quotaCountLimit -> Mono.from(newMaxQuotaManager.setMaxMessageReactive(quotaRoot, quotaCountLimit)))
             .then(Mono.from(oldMaxQuotaManager.listMaxStorageDetailsReactive(quotaRoot))
+                .filter(map -> map.containsKey(Quota.Scope.User))
                 .map(map -> map.get(Quota.Scope.User))
                 .flatMap(quotaSizeLimit -> Mono.from(newMaxQuotaManager.setMaxStorageReactive(quotaRoot, quotaSizeLimit))));
     }
