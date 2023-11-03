@@ -17,19 +17,36 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.modules.mailbox;
+package org.apache.james.blob.file;
 
-import org.apache.james.blob.api.BlobStore;
-import org.apache.james.blob.api.BucketName;
+import java.util.UUID;
 
-import com.google.inject.AbstractModule;
-import com.google.inject.name.Names;
+import org.apache.james.blob.api.BlobStoreDAO;
+import org.apache.james.blob.api.BlobStoreDAOContract;
+import org.apache.james.blob.api.HashBlobId;
+import org.apache.james.server.core.JamesServerResourceLoader;
+import org.apache.james.server.core.filesystem.FileSystemImpl;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 
-public class CassandraBucketModule extends AbstractModule {
+class FileBlobStoreDAOTest implements BlobStoreDAOContract {
+
+    private FileBlobStoreDAO blobStore;
+
+    @BeforeEach
+    void setUp() throws Exception {
+        blobStore = new FileBlobStoreDAO(new FileSystemImpl(new JamesServerResourceLoader("../testsFileSystemExtension/" + UUID.randomUUID())),
+            new HashBlobId.Factory());
+    }
+
     @Override
-    protected void configure() {
-        bind(BucketName.class)
-            .annotatedWith(Names.named(BlobStore.DEFAULT_BUCKET_NAME_QUALIFIER))
-            .toInstance(BucketName.DEFAULT);
+    public BlobStoreDAO testee() {
+        return blobStore;
+    }
+
+    @Override
+    @Disabled("Not supported")
+    public void mixingSaveReadAndDeleteShouldReturnConsistentState() {
+
     }
 }

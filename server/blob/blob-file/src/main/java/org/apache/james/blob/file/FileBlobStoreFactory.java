@@ -17,28 +17,29 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.modules.objectstorage;
+package org.apache.james.blob.file;
 
-import javax.inject.Named;
-import javax.inject.Singleton;
+import java.io.FileNotFoundException;
 
-import org.apache.james.blob.api.BucketName;
-import org.apache.james.blob.objectstorage.aws.S3BlobStoreConfiguration;
+import org.apache.james.filesystem.api.FileSystem;
+import org.apache.james.server.blob.deduplication.BlobStoreFactory;
 
-import com.google.inject.AbstractModule;
-import com.google.inject.Provides;
+public class FileBlobStoreFactory {
+    private final FileSystem fileSystem;
 
-public class DefaultBucketModule extends AbstractModule {
-    @Provides
-    @Singleton
-    private BucketName defaultBucket(S3BlobStoreConfiguration s3BlobStoreConfiguration) {
-        return s3BlobStoreConfiguration.getNamespace().orElse(BucketName.DEFAULT);
+    public FileBlobStoreFactory(FileSystem fileSystem) {
+        this.fileSystem = fileSystem;
     }
 
-    @Provides
-    @Named("defaultBucket")
-    @Singleton
-    private BucketName annotatedDefaultBucket(BucketName defaultBucket) {
-        return defaultBucket;
+    public BlobStoreFactory.RequireBlobIdFactory builder() {
+        return blobIdFactory -> {
+            try {
+                return BlobStoreFactory.builder()
+                    .blobStoreDAO(new FileBlobStoreDAO(fileSystem, blobIdFactory))
+                    .blobIdFactory(blobIdFactory);
+            } catch (FileNotFoundException e) {
+                throw new RuntimeException(e);
+            }
+        };
     }
 }
