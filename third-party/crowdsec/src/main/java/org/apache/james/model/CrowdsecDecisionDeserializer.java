@@ -17,19 +17,35 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james;
+package org.apache.james.model;
 
-import org.apache.james.modules.TestJMAPServerModule;
-import org.junit.jupiter.api.extension.RegisterExtension;
+import java.io.IOException;
+import java.time.Duration;
 
-class CassandraWithTikaTest implements JamesServerConcreteContract {
-    @RegisterExtension
-    static JamesServerExtension testExtension = TestingDistributedJamesServerBuilder.withSearchConfiguration(SearchConfiguration.openSearch())
-        .extension(new CassandraExtension())
-        .extension(new TikaExtension())
-        .extension(new DockerOpenSearchExtension())
-        .server(configuration -> CassandraJamesServerMain.createServer(configuration)
-            .overrideWith(new TestJMAPServerModule()))
-        .lifeCycle(JamesServerExtension.Lifecycle.PER_CLASS)
-        .build();
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.DeserializationContext;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
+
+public class CrowdsecDecisionDeserializer extends StdDeserializer<CrowdsecDecision> {
+    public CrowdsecDecisionDeserializer() {
+        this(null);
+    }
+
+    protected CrowdsecDecisionDeserializer(Class<?> vc) {
+        super(vc);
+    }
+
+    public CrowdsecDecision deserialize(JsonParser jp, DeserializationContext deserializationContext) throws IOException {
+        JsonNode node = jp.getCodec().readTree(jp);
+        return CrowdsecDecision.builder()
+            .duration(Duration.parse("PT" + node.get("duration").asText()))
+            .id(node.get("id").asLong())
+            .origin(node.get("origin").asText())
+            .scenario(node.get("scenario").asText())
+            .scope(node.get("scope").asText())
+            .type(node.get("type").asText())
+            .value(node.get("value").asText())
+            .build();
+    }
 }
