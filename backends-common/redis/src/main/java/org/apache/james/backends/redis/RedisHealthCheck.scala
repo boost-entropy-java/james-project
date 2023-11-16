@@ -17,7 +17,7 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.rate.limiter.redis
+package org.apache.james.backends.redis
 
 import java.time.Duration
 
@@ -34,7 +34,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.jdk.CollectionConverters._
 import scala.jdk.FutureConverters._
 
-class RedisHealthCheck @Inject()(redisConfiguration: RedisRateLimiterConfiguration) extends HealthCheck {
+class RedisHealthCheck @Inject()(redisConfiguration: RedisConfiguration) extends HealthCheck {
   private val redisComponent: ComponentName = new ComponentName("Redis")
   private val healthcheckTimeout = Duration.ofSeconds(3)
 
