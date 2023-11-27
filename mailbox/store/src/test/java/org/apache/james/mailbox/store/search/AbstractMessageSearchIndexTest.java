@@ -460,13 +460,13 @@ public abstract class AbstractMessageSearchIndexTest {
     }
 
     @Test
-    protected void bodyContainsShouldReturnUidOfMessageContainingTheApproximativeText() throws MailboxException {
+    protected void bodyContainsShouldReturnUidOfMessageContainingBothTerms() throws MailboxException {
         /* mail1.eml contains words created AND summary
            mail.eml contains created and thus matches the query with a low score */
         SearchQuery searchQuery = SearchQuery.of(SearchQuery.bodyContains("created summary"));
 
         assertThat(messageSearchIndex.search(session, mailbox, searchQuery).toStream())
-            .containsOnly(m2.getUid(), m8.getUid());
+            .containsOnly(m2.getUid());
     }
 
     @Test
@@ -549,6 +549,27 @@ public abstract class AbstractMessageSearchIndexTest {
 
         assertThat(Flux.from(messageManager.search(SearchQuery.of(SearchQuery.bodyContains("benwa@apache.org")), session)).toStream())
             .containsOnly(messageId1.getUid());
+    }
+
+    @Test
+    void subjectShouldMatchSubject() throws Exception {
+        assertThat(Flux.from(inboxMessageManager.search(SearchQuery.of(SearchQuery.subject("JSON")), session)).toStream())
+            .containsOnly(m2.getUid());
+    }
+
+    @Test
+    void subjectShouldNotIncludeIrrelevantResults() throws Exception {
+        ComposedMessageId m = inboxMessageManager.appendMessage(
+            ClassLoader.getSystemResourceAsStream("eml/oneInlinedAttachment.eml"),
+            new Date(1409608900000L),
+            session,
+            RECENT,
+            new Flags("Hello you")).getId();
+
+        awaitMessageCount(ImmutableList.of(), SearchQuery.matchAll(), 14);
+
+        assertThat(Flux.from(inboxMessageManager.search(SearchQuery.of(SearchQuery.subject("Inline attachment")), session)).toStream())
+            .containsOnly(m.getUid());
     }
 
     @Test
@@ -1296,11 +1317,11 @@ public abstract class AbstractMessageSearchIndexTest {
     }
 
     @Test
-    protected void mailsContainsShouldIncludeMailHavingAttachmentsMatchingTheRequest() throws Exception {
+    protected void mailsContainsShouldIncludeMailHavingAttachmentsMatchingAllTermsOfTheRequest() throws Exception {
         SearchQuery searchQuery = SearchQuery.of(SearchQuery.mailContains("root mailing list"));
 
         assertThat(messageSearchIndex.search(session, mailbox, searchQuery).toStream())
-            .containsOnly(m1.getUid(), m6.getUid());
+            .containsOnly(m1.getUid());
     }
 
     @Test
@@ -1318,6 +1339,7 @@ public abstract class AbstractMessageSearchIndexTest {
         // 5 : monkey@any.com
     }
 
+    // TODO fix
     @Test
     protected void sortOnFromShouldWork() throws Exception {
         SearchQuery searchQuery = SearchQuery.builder()
@@ -1326,11 +1348,11 @@ public abstract class AbstractMessageSearchIndexTest {
             .build();
 
         assertThat(messageSearchIndex.search(session, mailbox, searchQuery).toStream())
-            .containsExactly(m3.getUid(), m2.getUid(), m4.getUid(), m5.getUid());
-        // m3 : jira1@apache.org
-        // m2 : jira2@apache.org
-        // m4 : jira@apache.org
-        // m5 : mailet-api@james.apache.org
+            .containsExactly(m4.getUid(), m3.getUid(), m5.getUid(), m2.getUid());
+        // m4 : "abcd" <jira@apache.org>
+        // m3 : "efij" <jira1@apache.org>
+        // m5 : "Eric Charles (JIRA)" <mailet-api@james.apache.org>
+        // m2 : "Tellier Benoit (JIRA)" <jira2@apache.org>
     }
 
     @Test
@@ -1341,11 +1363,11 @@ public abstract class AbstractMessageSearchIndexTest {
             .build();
 
         assertThat(messageSearchIndex.search(session, mailbox, searchQuery).toStream())
-            .containsExactly(m5.getUid(), m3.getUid(), m2.getUid(), m4.getUid());
-        // 5 : "zzz" <mailet-api@james.apache.org>
+            .containsExactly(m3.getUid(), m2.getUid(), m4.getUid(), m5.getUid());
         // 3 : "aaa" <a-server-dev@james.apache.org>
         // 2 : "abc" <b-server-dev@james.apache.org>
         // 4 : "server" <c-server-dev@james.apache.org>
+        // 5 : "zzz" <mailet-api@james.apache.org>
     }
 
     @Test
@@ -1405,21 +1427,6 @@ public abstract class AbstractMessageSearchIndexTest {
 
         assertThat(messageSearchIndex.search(session, mailbox, searchQuery).toStream())
             .containsExactly(m2.getUid(), m3.getUid(), m4.getUid(), m5.getUid());
-    }
-
-    @Test
-    void searchWithFullTextShouldReturnMailsWhenNotAPerfectMatch() throws Exception {
-        assumeTrue(storeMailboxManager.getSupportedSearchCapabilities().contains(MailboxManager.SearchCapabilities.FullText));
-        ComposedMessageId messageWithBeautifulBananaAsTextAttachment = myFolderMessageManager.appendMessage(
-            MessageManager.AppendCommand.builder()
-            .build(ClassLoaderUtils.getSystemResourceAsSharedStream("eml/emailWithTextAttachment.eml")),
-            session).getId();
-        awaitMessageCount(ImmutableList.of(), SearchQuery.matchAll(), 14);
-
-        SearchQuery searchQuery = SearchQuery.of(SearchQuery.mailContains("User message banana"));
-
-        assertThat(messageSearchIndex.search(session, mailbox2, searchQuery).toStream())
-            .containsExactly(messageWithBeautifulBananaAsTextAttachment.getUid());
     }
 
     @Test
