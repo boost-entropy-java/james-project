@@ -21,9 +21,11 @@ package org.apache.james.mailets;
 
 import static org.apache.james.jmap.api.filtering.Rule.Condition.Comparator.CONTAINS;
 import static org.apache.james.jmap.api.filtering.Rule.Condition.Field.FROM;
+import static org.apache.james.mailets.configuration.CommonProcessors.RRT_ERROR_REPOSITORY;
 import static org.apache.james.mailets.configuration.Constants.DEFAULT_DOMAIN;
 import static org.apache.james.mailets.configuration.Constants.LOCALHOST_IP;
 import static org.apache.james.mailets.configuration.Constants.PASSWORD;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.File;
 
@@ -46,6 +48,7 @@ import org.apache.james.utils.FilteringManagementProbeImpl;
 import org.apache.james.utils.GuiceProbe;
 import org.apache.james.utils.MailRepositoryProbeImpl;
 import org.apache.james.utils.SMTPMessageSender;
+import org.apache.james.utils.SpoolerProbe;
 import org.apache.mailet.Mail;
 import org.assertj.core.api.SoftAssertions;
 import org.junit.jupiter.api.AfterEach;
@@ -95,6 +98,7 @@ public class FilterForwardIntegrationTest {
                         .mailet(ToRepository.class)
                         .addProperty("repositoryPath", CUSTOM_REPOSITORY.asString())))
                 .putProcessor(CommonProcessors.error())
+                .putProcessor(CommonProcessors.rrtError())
                 .putProcessor(CommonProcessors.transport())
                 .putProcessor(CommonProcessors.bounces()))
             .build(temporaryFolder);
@@ -126,14 +130,16 @@ public class FilterForwardIntegrationTest {
             .authenticate(ALICE.asString(), PASSWORD)
             .sendMessage(ALICE.asString(), BOB.asString());
 
-        Awaitility.await().until(() -> mailRepositoryProbe.getRepositoryMailCount(CUSTOM_REPOSITORY) == 1L);
+        Awaitility.await().until(() -> mailRepositoryProbe.getRepositoryMailCount(CUSTOM_REPOSITORY) == 2L);
 
         SoftAssertions.assertSoftly(Throwing.consumer(softly -> {
-            Mail mail1 = mailRepositoryProbe.listMails(CUSTOM_REPOSITORY)
-                .findAny().get();
+            Mail mail1 = mailRepositoryProbe.listMails(CUSTOM_REPOSITORY, BOB.asMailAddress()).get(0);
+            softly.assertThat(mail1.getRecipients()).containsOnly(BOB.asMailAddress());
+            softly.assertThat(mail1.getMaybeSender().asOptional()).contains(ALICE.asMailAddress());
 
-            softly.assertThat(mail1.getRecipients()).containsOnly(BOB.asMailAddress(), CEDRIC.asMailAddress());
-            softly.assertThat(mail1.getMaybeSender().asOptional()).contains(BOB.asMailAddress());
+            Mail mail2 = mailRepositoryProbe.listMails(CUSTOM_REPOSITORY, CEDRIC.asMailAddress()).get(0);
+            softly.assertThat(mail2.getRecipients()).containsOnly(CEDRIC.asMailAddress());
+            softly.assertThat(mail2.getMaybeSender().asOptional()).contains(BOB.asMailAddress());
         }));
     }
 
@@ -149,5 +155,44 @@ public class FilterForwardIntegrationTest {
 
         SoftAssertions.assertSoftly(Throwing.consumer(softly -> softly.assertThat(mailRepositoryProbe.listMails(CUSTOM_REPOSITORY)
             .anyMatch(Throwing.predicate(mail -> mail.getRecipients().contains(BOB.asMailAddress())))).isFalse()));
+    }
+
+    @Test
+    void regularForwardShouldNotLeadToRecordingRRTError() throws Exception {
+        filteringManagementProbe.defineRulesForUser(BOB, asRule(Forward.to(CEDRIC.asMailAddress()).withoutACopy()));
+
+        messageSender.connect(LOCALHOST_IP, jamesServer.getProbe(SmtpGuiceProbe.class).getSmtpPort())
+            .authenticate(ALICE.asString(), PASSWORD)
+            .sendMessage(ALICE.asString(), BOB.asString());
+
+        Awaitility.await().until(() -> mailRepositoryProbe.getRepositoryMailCount(CUSTOM_REPOSITORY) == 1L);
+
+        assertThat(mailRepositoryProbe.getRepositoryMailCount(RRT_ERROR_REPOSITORY)).isZero();
+    }
+
+    @Test
+    void localCopyShouldNotLeadToRecordingRRTError() throws Exception {
+        filteringManagementProbe.defineRulesForUser(BOB, asRule(Forward.to(CEDRIC.asMailAddress()).keepACopy()));
+
+        messageSender.connect(LOCALHOST_IP, jamesServer.getProbe(SmtpGuiceProbe.class).getSmtpPort())
+            .authenticate(ALICE.asString(), PASSWORD)
+            .sendMessage(ALICE.asString(), BOB.asString());
+
+        Awaitility.await().until(() -> mailRepositoryProbe.getRepositoryMailCount(CUSTOM_REPOSITORY) == 2L);
+
+        assertThat(mailRepositoryProbe.getRepositoryMailCount(RRT_ERROR_REPOSITORY)).isZero();
+    }
+
+    @Test
+    void localCopyAloneShouldNotLeadToRecordingRRTError() throws Exception {
+        filteringManagementProbe.defineRulesForUser(BOB, asRule(Forward.to().keepACopy()));
+
+        messageSender.connect(LOCALHOST_IP, jamesServer.getProbe(SmtpGuiceProbe.class).getSmtpPort())
+            .authenticate(ALICE.asString(), PASSWORD)
+            .sendMessage(ALICE.asString(), BOB.asString());
+
+        Awaitility.await().until(() -> mailRepositoryProbe.getRepositoryMailCount(CUSTOM_REPOSITORY) == 1L);
+
+        assertThat(mailRepositoryProbe.getRepositoryMailCount(RRT_ERROR_REPOSITORY)).isZero();
     }
 }

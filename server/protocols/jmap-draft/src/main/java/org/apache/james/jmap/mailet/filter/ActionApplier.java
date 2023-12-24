@@ -19,6 +19,8 @@
 
 package org.apache.james.jmap.mailet.filter;
 
+import static org.apache.james.jmap.mailet.filter.JMAPFiltering.RRT_ERROR;
+
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Stream;
@@ -51,6 +53,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Sets;
 
 public class ActionApplier {
     public static final Logger LOGGER = LoggerFactory.getLogger(ActionApplier.class);
@@ -140,9 +143,18 @@ public class ActionApplier {
                 }
 
                 Set<MailAddress> newRecipients = getNewRecipients(forward, recordedRecipients);
-                if (!newRecipients.isEmpty()) {
+                Set<MailAddress> forwardRecipients = Sets.difference(newRecipients, ImmutableSet.of(mailAddress));
+
+                if (!forwardRecipients.isEmpty()) {
+                    sendACopy(recordedRecipients, forwardRecipients);
+                }
+                boolean localCopy = newRecipients.contains(mailAddress);
+                if (!localCopy) {
                     removeFromRecipients();
-                    sendACopy(mailetContext, mailAddress, recordedRecipients, newRecipients);
+                }
+                boolean emailIsDropped = !forward.getAddresses().isEmpty() && forwardRecipients.isEmpty() && !localCopy;
+                if (emailIsDropped) {
+                    recordLoop();
                 }
             }));
     }
@@ -205,19 +217,29 @@ public class ActionApplier {
         }
     }
 
-    private void sendACopy(MailetContext context,
-                           MailAddress originalRecipient,
-                           LoopPrevention.RecordedRecipients recordedRecipients,
+    private void sendACopy(LoopPrevention.RecordedRecipients recordedRecipients,
                            Set<MailAddress> newRecipients) throws MessagingException {
         MailImpl copy = MailImpl.duplicate(mail);
         try {
-            copy.setSender(originalRecipient);
+            copy.setSender(mailAddress);
             copy.setRecipients(newRecipients);
-            recordedRecipients.merge(originalRecipient).recordOn(copy);
+            recordedRecipients.merge(mailAddress).recordOn(copy);
 
-            context.sendMail(copy);
+            mailetContext.sendMail(copy);
 
             recordInAuditTrail(copy);
+        } finally {
+            LifecycleUtil.dispose(copy);
+        }
+    }
+
+    private void recordLoop() throws MessagingException {
+        MailImpl copy = MailImpl.duplicate(mail);
+        try {
+            copy.setRecipients(ImmutableList.of(mailAddress));
+            copy.setState(RRT_ERROR.getValue());
+
+            mailetContext.sendMail(copy);
         } finally {
             LifecycleUtil.dispose(copy);
         }

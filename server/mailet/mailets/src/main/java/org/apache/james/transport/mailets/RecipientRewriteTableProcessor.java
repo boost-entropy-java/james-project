@@ -66,6 +66,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Sets;
 
 public class RecipientRewriteTableProcessor {
     private static final Logger LOGGER = LoggerFactory.getLogger(RecipientRewriteTableProcessor.class);
@@ -243,6 +244,22 @@ public class RecipientRewriteTableProcessor {
             };
         }
 
+        static ForwardDecision recordLoop(MailetContext context,
+                                          MailAddress originalRecipient,
+                                          ProcessingState errorProcessor) {
+            return mail -> {
+                MailImpl copy = MailImpl.duplicate(mail);
+                try {
+                    copy.setRecipients(ImmutableList.of(originalRecipient));
+                    copy.setState(errorProcessor.getValue());
+
+                    context.sendMail(copy, errorProcessor.getValue());
+                } finally {
+                    LifecycleUtil.dispose(copy);
+                }
+            };
+        }
+
         private static void recordInAuditTrail(Mail mail, MailImpl copy, MailAddress originalRecipient) {
             AuditTrail.entry()
                 .protocol("mailetcontainer")
@@ -288,15 +305,27 @@ public class RecipientRewriteTableProcessor {
 
         Set<MailAddress> newRecipients = recordedRecipients.nonRecordedRecipients(forwardedRecipients);
 
+        Set<MailAddress> forwardRecipients = Sets.difference(newRecipients, ImmutableSet.of(originalRecipient));
+
         if (recordedRecipients.getRecipients().contains(originalRecipient)) {
             return Stream.of();
         }
 
-        if (!newRecipients.isEmpty()) {
-            return Stream.of(ForwardDecision.sendACopy(mailetContext, originalRecipient, newRecipients),
-                ForwardDecision.removeRecipient(originalRecipient));
+        ImmutableList.Builder<ForwardDecision> result = ImmutableList.builder();
+
+        if (!forwardRecipients.isEmpty()) {
+            result.add(ForwardDecision.sendACopy(mailetContext, originalRecipient, forwardRecipients));
         }
-        return Stream.empty();
+        boolean localCopy = newRecipients.contains(originalRecipient);
+        if (!localCopy) {
+            result.add(ForwardDecision.removeRecipient(originalRecipient));
+        }
+        boolean emailIsDropped = !forwardedRecipients.isEmpty() && forwardRecipients.isEmpty() && !localCopy;
+        if (emailIsDropped) {
+            result.add(ForwardDecision.recordLoop(mailetContext, originalRecipient, errorProcessor));
+        }
+
+        return result.build().stream();
     }
 
     private ImmutableSet<Mapping> getForwards(MailAddress recipient) throws RecipientRewriteTableException {
