@@ -17,29 +17,34 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.jmap.api.change;
+package org.apache.james.imapserver.netty;
 
-import java.util.List;
-import java.util.function.Supplier;
-import java.util.stream.Stream;
+import java.net.InetSocketAddress;
+import java.util.Set;
 
-import org.apache.james.jmap.api.model.AccountId;
+import org.apache.james.imap.api.ConnectionCheck;
+import org.reactivestreams.Publisher;
 
-import com.google.common.collect.ImmutableList;
+import com.google.common.annotations.VisibleForTesting;
 
-public interface JmapChange {
-    AccountId getAccountId();
+import reactor.core.publisher.Mono;
 
-    JmapChange forSharee(AccountId accountId, Supplier<State> state);
+public class IpConnectionCheck implements ConnectionCheck {
+    private Set<String> bannedIps = Set.of();
 
-    boolean isNoop();
-
-    default ImmutableList<JmapChange> propagateToSharee(List<AccountId> sharees, State.Factory stateFactory) {
-        if (isNoop()) {
-            return ImmutableList.of();
+    @Override
+    @VisibleForTesting
+    public Publisher<Void> validate(InetSocketAddress remoteAddress) {
+        String ip = remoteAddress.getAddress().getHostAddress();
+        // check against bannedIps
+        if (bannedIps.contains(ip)) {
+            return Mono.error(() -> new RuntimeException("Banned"));
+        } else {
+            return Mono.empty();
         }
-        return Stream.concat(Stream.of(this), sharees.stream()
-                .map(shareeId -> forSharee(shareeId, stateFactory::generate)))
-            .collect(ImmutableList.toImmutableList());
+    }
+
+    public void setBannedIps(Set<String> bannedIps) {
+        this.bannedIps = bannedIps;
     }
 }

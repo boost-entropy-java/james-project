@@ -17,29 +17,19 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.jmap.api.change;
+package org.apache.james.imap.api;
 
-import java.util.List;
-import java.util.function.Supplier;
-import java.util.stream.Stream;
+import java.util.Set;
 
-import org.apache.james.jmap.api.model.AccountId;
+import org.apache.commons.configuration2.HierarchicalConfiguration;
+import org.apache.commons.configuration2.tree.ImmutableNode;
 
-import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 
-public interface JmapChange {
-    AccountId getAccountId();
+public class DefaultConnectionCheckFactory implements ConnectionCheckFactory {
 
-    JmapChange forSharee(AccountId accountId, Supplier<State> state);
-
-    boolean isNoop();
-
-    default ImmutableList<JmapChange> propagateToSharee(List<AccountId> sharees, State.Factory stateFactory) {
-        if (isNoop()) {
-            return ImmutableList.of();
-        }
-        return Stream.concat(Stream.of(this), sharees.stream()
-                .map(shareeId -> forSharee(shareeId, stateFactory::generate)))
-            .collect(ImmutableList.toImmutableList());
+    @Override
+    public Set<ConnectionCheck> create(HierarchicalConfiguration<ImmutableNode> config) {
+        return ImmutableSet.of();
     }
 }
