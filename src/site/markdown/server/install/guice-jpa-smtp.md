@@ -8,9 +8,15 @@
  - Docker
  - Maven (optional)
 
-### Download the artifacts
+### Compile the artifacts
 
-Download james-jpa-smtp-guice-3.8.0.zip from [the download page](http://james.apache.org/download.cgi#Apache_James_Server) and deflate it.
+Run:
+
+```
+mvn clean install -T 4 -DskipTests --am --pl :james-server-jpa-smtp-app
+```
+
+You will find the artifacts within `server/apps/jpa-smtp-app/target`.
 
 ### (alternative) Building the artifacts
 
@@ -40,9 +46,9 @@ $ keytool -genkey -alias james -keyalg RSA -keystore conf/keystore
 Once everything is set up, you just have to run the jar with :
 
 ```bash
-$ java -classpath 'james-server-jpa-smtp-guice.jar:james-server-jpa-smtp-guice.lib/*' \
-    -javaagent:james-server-jpa-smtp-guice.lib/openjpa-2.4.2.jar \
-    -Dlogback.configurationFile=conf/logback.xml \
-    -Dworking.directory=. \
-    org.apache.james.JPAJamesServerMain
+$ java -javaagent:james-server-jpa-smtp-app.lib/openjpa-3.2.0.jar \
+  -Dworking.directory=. \
+  -Djdk.tls.ephemeralDHKeySize=2048 \
+  -Dlogback.configurationFile=conf/logback.xml \
+  -jar james-server-jpa-smtp-app.jar
 ```
