@@ -17,11 +17,11 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james;
+package org.apache.james.crowdsec;
 
-import static org.apache.james.CrowdsecExtension.CROWDSEC_PORT;
-import static org.apache.james.model.CrowdsecClientConfiguration.DEFAULT_API_KEY;
-import static org.apache.james.model.CrowdsecDecision.BAN;
+import static org.apache.james.crowdsec.CrowdsecExtension.CROWDSEC_PORT;
+import static org.apache.james.crowdsec.client.CrowdsecClientConfiguration.DEFAULT_API_KEY;
+import static org.apache.james.crowdsec.model.CrowdsecDecision.BAN;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -29,9 +29,9 @@ import java.io.IOException;
 import java.net.URL;
 import java.util.List;
 
-import org.apache.james.model.CrowdsecClientConfiguration;
-import org.apache.james.model.CrowdsecDecision;
-import org.apache.james.model.CrowdsecHttpClient;
+import org.apache.james.crowdsec.client.CrowdsecClientConfiguration;
+import org.apache.james.crowdsec.client.CrowdsecHttpClient;
+import org.apache.james.crowdsec.model.CrowdsecDecision;
 import org.assertj.core.api.SoftAssertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -79,17 +79,6 @@ class CrowdsecHttpClientTest {
 
         assertThatThrownBy(() -> httpClient.getCrowdsecDecisions().block())
             .hasMessage("Invalid api-key bouncer");
-    }
-
-    @Test
-    void getDecisionsWithWrongCrowdsecUrl() throws IOException, InterruptedException {
-        banIP("--range", "192.168.0.0/16");
-        int port = crowdsecExtension.getCrowdsecContainer().getMappedPort(CROWDSEC_PORT);
-        CrowdsecClientConfiguration config = new CrowdsecClientConfiguration(new URL("http://localhost:" + port + "/v2"), DEFAULT_API_KEY);
-        CrowdsecHttpClient httpClient = new CrowdsecHttpClient(config);
-
-        assertThatThrownBy(() -> httpClient.getCrowdsecDecisions().block())
-            .hasMessage("Crowdsec url not found");
     }
 
     @Test

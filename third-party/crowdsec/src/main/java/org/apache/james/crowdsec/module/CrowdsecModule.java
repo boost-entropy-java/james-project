@@ -17,35 +17,30 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.model;
+package org.apache.james.crowdsec.module;
 
-import java.io.IOException;
-import java.time.Duration;
+import java.io.FileNotFoundException;
 
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.databind.DeserializationContext;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.deser.std.StdDeserializer;
+import org.apache.commons.configuration2.ex.ConfigurationException;
+import org.apache.james.crowdsec.client.CrowdsecClientConfiguration;
+import org.apache.james.crowdsec.client.CrowdsecHttpClient;
+import org.apache.james.utils.PropertiesProvider;
 
-public class CrowdsecDecisionDeserializer extends StdDeserializer<CrowdsecDecision> {
-    public CrowdsecDecisionDeserializer() {
-        this(null);
+import com.google.inject.AbstractModule;
+import com.google.inject.Provides;
+import com.google.inject.Singleton;
+
+public class CrowdsecModule extends AbstractModule {
+
+    @Provides
+    @Singleton
+    public CrowdsecClientConfiguration crowdsecClientConfiguration(PropertiesProvider propertiesProvider) throws ConfigurationException, FileNotFoundException {
+        return CrowdsecClientConfiguration.from(propertiesProvider.getConfiguration("crowdsec"));
     }
 
-    protected CrowdsecDecisionDeserializer(Class<?> vc) {
-        super(vc);
-    }
-
-    public CrowdsecDecision deserialize(JsonParser jp, DeserializationContext deserializationContext) throws IOException {
-        JsonNode node = jp.getCodec().readTree(jp);
-        return CrowdsecDecision.builder()
-            .duration(Duration.parse("PT" + node.get("duration").asText()))
-            .id(node.get("id").asLong())
-            .origin(node.get("origin").asText())
-            .scenario(node.get("scenario").asText())
-            .scope(node.get("scope").asText())
-            .type(node.get("type").asText())
-            .value(node.get("value").asText())
-            .build();
+    @Provides
+    @Singleton
+    public CrowdsecHttpClient crowdsecHttpClient(CrowdsecClientConfiguration crowdsecClientConfiguration) {
+        return new CrowdsecHttpClient(crowdsecClientConfiguration);
     }
 }

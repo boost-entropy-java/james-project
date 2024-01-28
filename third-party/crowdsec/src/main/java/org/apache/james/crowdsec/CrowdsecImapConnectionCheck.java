@@ -17,30 +17,21 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james;
+package org.apache.james.crowdsec;
 
-import static org.apache.james.model.CrowdsecClientConfiguration.DEFAULT_TIMEOUT;
+import static org.apache.james.crowdsec.CrowdsecUtils.isBanned;
 
 import java.net.InetSocketAddress;
-import java.util.concurrent.TimeoutException;
 
 import javax.inject.Inject;
 
-import org.apache.commons.net.util.SubnetUtils;
-import org.apache.james.exception.CrowdsecException;
+import org.apache.james.crowdsec.client.CrowdsecClientConfiguration;
+import org.apache.james.crowdsec.client.CrowdsecHttpClient;
+import org.apache.james.crowdsec.exception.CrowdsecException;
 import org.apache.james.imap.api.ConnectionCheck;
-import org.apache.james.model.CrowdsecClientConfiguration;
-import org.apache.james.model.CrowdsecDecision;
-import org.apache.james.model.CrowdsecHttpClient;
 import org.reactivestreams.Publisher;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import reactor.core.publisher.Mono;
 
 public class CrowdsecImapConnectionCheck implements ConnectionCheck {
-    private static final Logger LOGGER = LoggerFactory.getLogger(CrowdsecImapConnectionCheck.class);
-
     private final CrowdsecHttpClient client;
 
     @Inject
@@ -53,28 +44,7 @@ public class CrowdsecImapConnectionCheck implements ConnectionCheck {
         String ip = remoteAddress.getAddress().getHostAddress();
 
         return client.getCrowdsecDecisions()
-            .timeout(DEFAULT_TIMEOUT)
-            .onErrorResume(TimeoutException.class, e -> Mono.fromRunnable(() -> LOGGER.warn("Timeout while questioning to CrowdSec. May need to check the CrowdSec configuration.")))
             .filter(decisions -> decisions.stream().anyMatch(decision -> isBanned(decision, ip)))
             .handle((crowdsecDecisions, synchronousSink) -> synchronousSink.error(new CrowdsecException("Ip " + ip + " is not allowed to connect to IMAP server by Crowdsec")));
-    }
-
-    private boolean isBanned(CrowdsecDecision decision, String ip) {
-        if (decision.getScope().equals("Ip") && ip.contains(decision.getValue())) {
-            LOGGER.warn("Connection from IP {} has been blocked by CrowdSec for duration {}", ip, decision.getDuration());
-            return true;
-        }
-        if (decision.getScope().equals("Range") && belongToNetwork(decision.getValue(), ip)) {
-            LOGGER.warn("Connection from IP {} has been blocked by CrowdSec for duration {}", ip, decision.getDuration());
-            return true;
-        }
-        return false;
-    }
-
-    private boolean belongToNetwork(String value, String ip) {
-        SubnetUtils subnetUtils = new SubnetUtils(value);
-        subnetUtils.setInclusiveHostCount(true);
-
-        return subnetUtils.getInfo().isInRange(ip);
     }
 }

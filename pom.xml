@@ -655,7 +655,7 @@
         <tink.version>1.9.0</tink.version>
         <lettuce.core.version>6.3.0.RELEASE</lettuce.core.version>
 
-        <bouncycastle.version>1.70</bouncycastle.version>
+        <bouncycastle.version>1.77</bouncycastle.version>
 
         <scala.base>2.13</scala.base>
         <scala.version>${scala.base}.11</scala.version>
@@ -2211,6 +2211,11 @@
                 <version>${guice.version}</version>
             </dependency>
             <dependency>
+                <groupId>com.intellisrc</groupId>
+                <artifactId>spark-core</artifactId>
+                <version>2.9.4-unofficial-5</version>
+            </dependency>
+            <dependency>
                 <groupId>com.jayway.jsonpath</groupId>
                 <artifactId>json-path</artifactId>
                 <version>2.9.0</version>
@@ -2229,11 +2234,6 @@
                 <groupId>com.rabbitmq</groupId>
                 <artifactId>amqp-client</artifactId>
                 <version>5.20.0</version>
-            </dependency>
-            <dependency>
-                <groupId>com.sparkjava</groupId>
-                <artifactId>spark-core</artifactId>
-                <version>2.9.4</version>
             </dependency>
             <dependency>
                 <groupId>com.sun.activation</groupId>
@@ -2736,17 +2736,17 @@
             </dependency>
             <dependency>
                 <groupId>org.bouncycastle</groupId>
-                <artifactId>bcmail-jdk15on</artifactId>
+                <artifactId>bcmail-jdk18on</artifactId>
                 <version>${bouncycastle.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.bouncycastle</groupId>
-                <artifactId>bcpkix-jdk15on</artifactId>
+                <artifactId>bcpkix-jdk18on</artifactId>
                 <version>${bouncycastle.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.bouncycastle</groupId>
-                <artifactId>bcprov-jdk15on</artifactId>
+                <artifactId>bcprov-jdk18on</artifactId>
                 <version>${bouncycastle.version}</version>
             </dependency>
 

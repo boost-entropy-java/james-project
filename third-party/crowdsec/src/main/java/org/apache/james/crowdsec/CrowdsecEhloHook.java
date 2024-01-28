@@ -17,16 +17,17 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james;
+package org.apache.james.crowdsec;
+
+import static org.apache.james.crowdsec.CrowdsecUtils.isBanned;
 
 import java.util.List;
 
 import javax.inject.Inject;
 
-import org.apache.commons.net.util.SubnetUtils;
-import org.apache.james.model.CrowdsecClientConfiguration;
-import org.apache.james.model.CrowdsecDecision;
-import org.apache.james.model.CrowdsecHttpClient;
+import org.apache.james.crowdsec.client.CrowdsecClientConfiguration;
+import org.apache.james.crowdsec.client.CrowdsecHttpClient;
+import org.apache.james.crowdsec.model.CrowdsecDecision;
 import org.apache.james.protocols.smtp.SMTPSession;
 import org.apache.james.protocols.smtp.hook.HeloHook;
 import org.apache.james.protocols.smtp.hook.HookResult;
@@ -44,23 +45,6 @@ public class CrowdsecEhloHook implements HeloHook {
         String ip = session.getRemoteAddress().getAddress().getHostAddress();
         return crowdsecHttpClient.getCrowdsecDecisions()
             .map(decisions -> apply(decisions, ip)).block();
-    }
-
-    private boolean isBanned(CrowdsecDecision decision, String ip) {
-        if (decision.getScope().equals("Ip") && ip.contains(decision.getValue())) {
-            return true;
-        }
-        if (decision.getScope().equals("Range") && belongToNetwork(decision.getValue(), ip)) {
-            return true;
-        }
-        return false;
-    }
-
-    private boolean belongToNetwork(String value, String ip) {
-        SubnetUtils subnetUtils = new SubnetUtils(value);
-        subnetUtils.setInclusiveHostCount(true);
-
-        return subnetUtils.getInfo().isInRange(ip);
     }
 
     private HookResult apply(List<CrowdsecDecision> decisions, String ip) {

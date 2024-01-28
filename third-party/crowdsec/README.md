@@ -6,23 +6,48 @@ This module is for developing and delivering extensions to James for the [Crowds
 
 - The Crowdsec extension requires an extra configuration file `crowdsec.properties` to configure Crowdsec connection
   Configuration parameters:
-    - `crowdsecUrl` : URL defining the Crowdsec's bouncer. Eg: http://crowdsec:8080/v1
-    - `apiKey` : Api key for pass authentication when request to Crowdsec's bouncer.
+    - `crowdsecUrl` : String. Required. URL defining the Crowdsec's bouncer. Eg: http://crowdsec:8080/v1
+    - `apiKey` : String. Required. Api key for pass authentication when request to Crowdsec.
+    - `timeout` : Duration. Optional. Default to `500ms`. Timeout questioning to CrowdSec. 
+      E.g. `500ms`, `1 second`,...
 
 - Declare the `extensions.properties` for this module.
 
 ```
-guice.extension.module=org.apache.james.module.CrowdsecModule
+guice.extension.module=org.apache.james.crowdsec.module.CrowdsecModule
 ```
 
+### CrowdSec support for SMTP
 - Declare the Crowdsec EhloHook in `smtpserver.xml`. Eg:
 
 ```
 <handlerchain>
     <handler class="org.apache.james.smtpserver.fastfail.ValidRcptHandler"/>
     <handler class="org.apache.james.smtpserver.CoreCmdHandlerLoader"/>
-    <handler class="org.apache.james.CrowdsecEhloHook"/>
+    <handler class="org.apache.james.crowdsec.CrowdsecEhloHook"/>
 </handlerchain>
+```
+
+### CrowdSec support for IMAP
+- Declare the `CrowdsecImapConnectionCheck` in `imapserver.xml`. Eg:
+
+```
+<imapserver enabled="true">
+        ...
+        <additionalConnectionChecks>org.apache.james.crowdsec.CrowdsecImapConnectionCheck</additionalConnectionChecks>
+</imapserver>
+```
+
+### CrowdSec support for POP3
+- Declare the `CrowdsecPOP3CheckHandler` in `pop3server.xml`. Eg:
+- 
+```
+<pop3server enabled="true">
+    <handlerchain>
+        <handler class="org.apache.james.pop3server.core.CoreCmdHandlerLoader"/>
+        <handler class="org.apache.james.crowdsec.CrowdsecPOP3CheckHandler"/>
+    </handlerchain>
+</pop3server>
 ```
 
 - Docker compose file example: [docker-compose.yml](docker-compose.yml).
@@ -47,7 +72,6 @@ curl -XGET http://localhost:8080/v1/decisions -H "X-Api-Key: default_api_key" -H
 Response codes:
 - 200: Success
 - 403: Invalid apikey. Try with a different value for apikey.
-- 404: Crowdsec's url is not found. Maybe there is no bouncer in Crowdsec, check it and create a new one.
 
 Responses:
 - It will be null if there is no decision.
