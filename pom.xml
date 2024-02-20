@@ -2371,7 +2371,7 @@
             <dependency>
                 <groupId>io.github.hakky54</groupId>
                 <artifactId>sslcontext-kickstart-for-pem</artifactId>
-                <version>8.1.2</version>
+                <version>8.3.1</version>
             </dependency>
             <dependency>
                 <groupId>io.github.openfeign</groupId>
@@ -3269,6 +3269,16 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-remote-resources-plugin</artifactId>
                     <version>1.6.0</version>
+                    <executions>
+                        <execution>
+                            <!--
+                            Disable remote resources processing by default.
+                            It is enabled selectively in the projects that need it
+                            -->
+                            <id>process-resource-bundles</id>
+                            <phase>none</phase>
+                        </execution>
+                    </executions>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
@@ -3487,9 +3497,9 @@
                     </configuration>
                 </plugin>
                 <plugin>
-                    <groupId>pl.project13.maven</groupId>
-                    <artifactId>git-commit-id-plugin</artifactId>
-                    <version>4.9.10</version>
+                    <groupId>io.github.git-commit-id</groupId>
+                    <artifactId>git-commit-id-maven-plugin</artifactId>
+                    <version>7.0.0</version>
                 </plugin>
             </plugins>
         </pluginManagement>
@@ -3626,29 +3636,30 @@
                 </executions>
             </plugin>
             <plugin>
-                <groupId>pl.project13.maven</groupId>
-                <artifactId>git-commit-id-plugin</artifactId>
+                <groupId>io.github.git-commit-id</groupId>
+                <artifactId>git-commit-id-maven-plugin</artifactId>
                 <configuration>
                     <dotGitDirectory>${project.basedir}/.git</dotGitDirectory>
-                    <prefix>git</prefix>
-                    <verbose>false</verbose>
+                    <injectAllReactorProjects>true</injectAllReactorProjects>
                     <generateGitPropertiesFile>true</generateGitPropertiesFile>
                     <generateGitPropertiesFilename>${project.build.outputDirectory}/git.properties</generateGitPropertiesFilename>
+                    <failOnNoGitDirectory>false</failOnNoGitDirectory>
                     <format>json</format>
+                    <gitDescribe>
+                        <skip>false</skip>
+                        <always>true</always>
+                        <dirty>-dirty</dirty>
+                    </gitDescribe>
                     <includeOnlyProperties>
                         <includeOnlyProperty>git.commit.id</includeOnlyProperty>
                         <includeOnlyProperty>git.commit.id.describe</includeOnlyProperty>
                         <includeOnlyProperty>git.commit.message.short</includeOnlyProperty>
                         <includeOnlyProperty>git.dirty</includeOnlyProperty>
                     </includeOnlyProperties>
+                    <prefix>git</prefix>
                     <skip>false</skip>
                     <useNativeGit>true</useNativeGit>
-                    <failOnNoGitDirectory>false</failOnNoGitDirectory>
-                    <gitDescribe>
-                        <skip>false</skip>
-                        <always>true</always>
-                        <dirty>-dirty</dirty>
-                    </gitDescribe>
+                    <verbose>false</verbose>
                 </configuration>
                 <executions>
                     <execution>
@@ -3930,7 +3941,7 @@
                             <artifactId>maven-remote-resources-plugin</artifactId>
                             <executions>
                                 <execution>
-                                    <id>process-resource-bundles</id>
+                                    <id>process</id>
                                     <phase>none</phase>
                                 </execution>
                             </executions>
