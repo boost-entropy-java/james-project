@@ -26,6 +26,8 @@ import java.util.Collection;
 import java.util.Set;
 import java.util.stream.Stream;
 
+import jakarta.mail.MessagingException;
+
 import org.apache.james.core.MailAddress;
 import org.apache.james.mime4j.codec.DecodeMonitor;
 import org.apache.james.mime4j.field.ContentTypeFieldLenientImpl;
@@ -55,12 +57,12 @@ public class HasMimeType extends GenericMatcher {
     private Set<String> acceptedContentTypes;
 
     @Override
-    public void init() throws javax.mail.MessagingException {
+    public void init() throws MessagingException {
         acceptedContentTypes = ImmutableSet.copyOf(Splitter.on(",").trimResults().split(getCondition()));
     }
 
     @Override
-    public Collection<MailAddress> match(Mail mail) throws javax.mail.MessagingException {
+    public Collection<MailAddress> match(Mail mail) throws MessagingException {
         return StreamUtils.ofNullable(mail.getMessage().getHeader(CONTENT_TYPE))
             .flatMap(this::getMimeType)
             .filter(acceptedContentTypes::contains)

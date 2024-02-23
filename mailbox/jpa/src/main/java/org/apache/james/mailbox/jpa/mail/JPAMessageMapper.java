@@ -26,10 +26,11 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import javax.mail.Flags;
 import javax.persistence.EntityManagerFactory;
 import javax.persistence.PersistenceException;
 import javax.persistence.Query;
+
+import jakarta.mail.Flags;
 
 import org.apache.james.backends.jpa.JPAConfiguration;
 import org.apache.james.mailbox.ApplicableFlagBuilder;

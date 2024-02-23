@@ -27,11 +27,11 @@ import cats.implicits.toTraverseOps
 import com.google.common.collect.ImmutableMap
 import eu.timepit.refined.auto._
 import eu.timepit.refined.refineV
+import jakarta.mail.Address
+import jakarta.mail.Message.RecipientType
+import jakarta.mail.internet.{InternetAddress, MimeMessage}
 import javax.annotation.PreDestroy
 import javax.inject.Inject
-import javax.mail.Address
-import javax.mail.Message.RecipientType
-import javax.mail.internet.{InternetAddress, MimeMessage}
 import org.apache.commons.lang3.StringUtils
 import org.apache.james.core.{MailAddress, Username}
 import org.apache.james.jmap.core.CapabilityIdentifier.{CapabilityIdentifier, EMAIL_SUBMISSION, JMAP_CORE}
@@ -82,21 +82,35 @@ object EmailSubmissionSetMethod {
                              messageId: MessageId) extends CreationResult
   case class CreationFailure(emailSubmissionCreationId: EmailSubmissionCreationId, exception: Throwable) extends CreationResult {
     def asSetError: SetError = exception match {
-      case e: EmailSubmissionCreationParseException => e.setError
-      case _: NoRecipientException => SetError(EmailSubmissionSetMethod.noRecipients,
-        SetErrorDescription("Attempt to send a mail with no recipients"), None)
-      case e: ForbiddenMailFromException => SetError(EmailSubmissionSetMethod.forbiddenMailFrom,
-        SetErrorDescription(s"Attempt to send a mail whose MimeMessage From and Sender fields not allowed for connected user: ${e.from}"), None)
-      case e: ForbiddenFromException => SetError(EmailSubmissionSetMethod.forbiddenFrom,
-        SetErrorDescription(s"Attempt to send a mail whose envelope From not allowed for connected user: ${e.from}"),
-        Some(Properties("envelope.mailFrom")))
-      case _: MessageNotFoundException => SetError(SetError.invalidArgumentValue,
-        SetErrorDescription("The email to be sent cannot be found"),
-        Some(Properties("emailId")))
-      case e: DateTimeParseException => SetError.invalidArguments(SetErrorDescription(e.getMessage))
-      case e: IllegalArgumentException => SetError.invalidArguments(SetErrorDescription(e.getMessage))
+      case e: EmailSubmissionCreationParseException =>
+        LOGGER.info("Failed to parse EMailSubmission/set create", e)
+        e.setError
+      case _: NoRecipientException =>
+        LOGGER.info("Attempt to send a mail with no recipients")
+        SetError(EmailSubmissionSetMethod.noRecipients,
+          SetErrorDescription("Attempt to send a mail with no recipients"), None)
+      case e: ForbiddenMailFromException =>
+        LOGGER.warn(s"Attempt to send a mail whose MimeMessage From and Sender fields not allowed for connected user: ${e.from}")
+        SetError(EmailSubmissionSetMethod.forbiddenMailFrom,
+          SetErrorDescription(s"Attempt to send a mail whose MimeMessage From and Sender fields not allowed for connected user: ${e.from}"), None)
+      case e: ForbiddenFromException =>
+        LOGGER.warn(s"Attempt to send a mail whose envelope From not allowed for connected user: ${e.from}")
+        SetError(EmailSubmissionSetMethod.forbiddenFrom,
+          SetErrorDescription(s"Attempt to send a mail whose envelope From not allowed for connected user: ${e.from}"),
+          Some(Properties("envelope.mailFrom")))
+      case _: MessageNotFoundException =>
+        LOGGER.info(" EmailSubmission/set failed as the underlying email could not be found")
+        SetError(SetError.invalidArgumentValue,
+          SetErrorDescription("The email to be sent cannot be found"),
+          Some(Properties("emailId")))
+      case e: DateTimeParseException =>
+        LOGGER.info("Failed to parse date time", e)
+        SetError.invalidArguments(SetErrorDescription(e.getMessage))
+      case e: IllegalArgumentException =>
+        LOGGER.info("Illegal argument in EmailSubmission/set", e)
+        SetError.invalidArguments(SetErrorDescription(e.getMessage))
       case e: Exception =>
-        e.printStackTrace()
+        LOGGER.error("Failed to send an email with EmailSubmission/set", e)
         SetError.serverFail(SetErrorDescription(exception.getMessage))
     }
   }
@@ -108,7 +122,6 @@ object EmailSubmissionSetMethod {
       }
       .toMap
       .map(creation => (creation._1, creation._2))
-
 
     def retrieveErrors: Map[EmailSubmissionCreationId, SetError] = created
       .flatMap {

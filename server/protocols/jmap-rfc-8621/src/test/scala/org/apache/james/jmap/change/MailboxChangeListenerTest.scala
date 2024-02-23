@@ -23,7 +23,7 @@ package org.apache.james.jmap.change
 import java.time.{Clock, ZonedDateTime}
 
 import com.google.common.collect.ImmutableList
-import javax.mail.Flags
+import jakarta.mail.Flags
 import org.apache.james.events.delivery.InVmEventDelivery
 import org.apache.james.events.{Event, EventBus, InVMEventBus, MemoryEventDeadLetters, RegistrationKey, RetryBackoffConfiguration}
 import org.apache.james.jmap.api.change.{EmailChange, EmailChangeRepository, Limit, MailboxAndEmailChange, MailboxChange, MailboxChangeRepository, State}

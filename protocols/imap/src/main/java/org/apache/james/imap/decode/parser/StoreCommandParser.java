@@ -21,7 +21,8 @@ package org.apache.james.imap.decode.parser;
 import java.util.Locale;
 
 import javax.inject.Inject;
-import javax.mail.Flags;
+
+import jakarta.mail.Flags;
 
 import org.apache.james.imap.api.ImapConstants;
 import org.apache.james.imap.api.ImapMessage;

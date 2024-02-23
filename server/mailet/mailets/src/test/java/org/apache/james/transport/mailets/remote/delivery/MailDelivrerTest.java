@@ -31,10 +31,10 @@ import static org.mockito.Mockito.when;
 import java.io.IOException;
 import java.util.Collection;
 
-import javax.mail.Address;
-import javax.mail.MessagingException;
-import javax.mail.SendFailedException;
-import javax.mail.internet.InternetAddress;
+import jakarta.mail.Address;
+import jakarta.mail.MessagingException;
+import jakarta.mail.SendFailedException;
+import jakarta.mail.internet.InternetAddress;
 
 import org.apache.james.dnsservice.api.TemporaryResolutionException;
 import org.apache.james.domainlist.api.DomainList;
@@ -44,12 +44,12 @@ import org.apache.mailet.MailetContext;
 import org.apache.mailet.base.MailAddressFixture;
 import org.apache.mailet.base.test.FakeMail;
 import org.apache.mailet.base.test.FakeMailetConfig;
+import org.eclipse.angus.mail.smtp.SMTPSenderFailedException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.UnmodifiableIterator;
-import com.sun.mail.smtp.SMTPSenderFailedException;
 
 @SuppressWarnings("deprecation")
 class MailDelivrerTest {

@@ -44,11 +44,14 @@ import org.apache.james.mime4j.message.DefaultMessageBuilder
 import org.apache.james.mime4j.stream.MimeConfig
 import org.apache.james.util.ReactorUtils
 import org.reactivestreams.Publisher
+import org.slf4j.LoggerFactory
 import reactor.core.scala.publisher.{SFlux, SMono}
 
 import scala.util.{Try, Using}
 
 object EmailImportMethod {
+  private val LOGGER = LoggerFactory.getLogger(classOf[EmailImportMethod])
+
   case class ImportWithBlob(id: EmailCreationId, request: EmailImport, blob: Blob)
   case class ImportResults(results: Seq[ImportResult]) {
     def created: Option[Map[EmailCreationId, EmailCreationResponse]] =
@@ -71,11 +74,21 @@ object EmailImportMethod {
   case class ImportSuccess(clientId: EmailCreationId, response: EmailCreationResponse) extends ImportResult
   case class ImportFailure(clientId: EmailCreationId, e: Throwable) extends ImportResult {
     def asMessageSetError: SetError = e match {
-      case e: BlobNotFoundException => SetError.notFound(SetErrorDescription(s"Blob ${e.blobId} could not be found"))
-      case e: MailboxNotFoundException => SetError.notFound(SetErrorDescription("Mailbox " + e.getMessage))
-      case e: IllegalArgumentException => SetError.invalidArguments(SetErrorDescription(e.getMessage))
-      case e: OverQuotaException => SetError.overQuota(SetErrorDescription(e.getMessage))
-      case _ => SetError.serverFail(SetErrorDescription(e.getMessage))
+      case e: BlobNotFoundException =>
+        LOGGER.info(s"Could not import email as ${e.blobId} is not found")
+        SetError.notFound(SetErrorDescription(s"Blob ${e.blobId} could not be found"))
+      case e: MailboxNotFoundException =>
+        LOGGER.info(s"Could not import email as Mailbox ${e.getMessage} is not found")
+        SetError.notFound(SetErrorDescription("Mailbox " + e.getMessage))
+      case e: IllegalArgumentException =>
+        LOGGER.info("Illegal arguments while importing email", e)
+        SetError.invalidArguments(SetErrorDescription(e.getMessage))
+      case e: OverQuotaException =>
+        LOGGER.info(s"Could not import email as the user is overquota", e)
+        SetError.overQuota(SetErrorDescription(e.getMessage))
+      case _ =>
+        LOGGER.error("Failed to import email", e)
+        SetError.serverFail(SetErrorDescription(e.getMessage))
     }
   }
 }
@@ -129,21 +142,21 @@ class EmailImportMethod @Inject() (val metricFactory: MetricFactory,
       .flatMap {
         case creationId -> emailImport => resolveBlob(mailboxSession, creationId, emailImport)
       }
-      .map {
+      .flatMap {
         case Right(emailImport) => importEmail(mailboxSession, emailImport)
-        case Left(e) => e
+        case Left(e) => SMono.just(e)
       }.collectSeq()
       .map(ImportResults)
 
-  private def importEmail(mailboxSession: MailboxSession, emailImport: ImportWithBlob): ImportResult = {
+  private def importEmail(mailboxSession: MailboxSession, emailImport: ImportWithBlob): SMono[ImportResult] = {
     val either = for {
       validatedRequest <- emailImport.request.validate
-      message <- asMessage(emailImport.blob)
+      message <- SMono.fromTry(asMessage(emailImport.blob))
       response <- append(validatedRequest, message, mailboxSession)
     } yield response
 
-    either.fold(e => ImportFailure(emailImport.id, e),
-      response => ImportSuccess(emailImport.id, response))
+    either.map(r => ImportSuccess(emailImport.id, r))
+      .onErrorResume(e => SMono.just(ImportFailure(emailImport.id, e)))
   }
 
   private def resolveBlob(mailboxSession: MailboxSession, creationId: EmailCreationId, emailImport: EmailImport): SMono[Either[ImportFailure, ImportWithBlob]] =
@@ -151,25 +164,23 @@ class EmailImportMethod @Inject() (val metricFactory: MetricFactory,
       .map(blob => Right[ImportFailure, ImportWithBlob](ImportWithBlob(creationId, emailImport, blob)))
       .onErrorResume(e => SMono.just(Left[ImportFailure, ImportWithBlob](ImportFailure(creationId, e))))
 
-  private def asMessage(blob: Blob): Either[Throwable, Message] = {
+  private def asMessage(blob: Blob): Try[Message] = {
     val defaultMessageBuilder = new DefaultMessageBuilder
     defaultMessageBuilder.setMimeEntityConfig(MimeConfig.PERMISSIVE)
     defaultMessageBuilder.setDecodeMonitor(DecodeMonitor.SILENT)
 
     Using(blob.content) {content => defaultMessageBuilder.parseMessage(content)}
-      .toEither
   }
 
-  private def append(emailImport: ValidatedEmailImport, message: Message, mailboxSession: MailboxSession): Either[Throwable, EmailCreationResponse] =
-    Try(mailboxManager.getMailbox(emailImport.mailboxId, mailboxSession)
-      .appendMessage(AppendCommand.builder()
+  private def append(emailImport: ValidatedEmailImport, message: Message, mailboxSession: MailboxSession): SMono[EmailCreationResponse] =
+    SMono(mailboxManager.getMailboxReactive(emailImport.mailboxId, mailboxSession))
+      .flatMap(mailbox => SMono(mailbox.appendMessageReactive(AppendCommand.builder()
         .recent()
         .withFlags(emailImport.keywords.asFlags)
         .withInternalDate(Date.from(emailImport.receivedAt.asUTC.toInstant))
         .build(message),
-        mailboxSession))
+        mailboxSession)))
       .map(asEmailCreationResponse)
-      .toEither
 
   private def asEmailCreationResponse(appendResult: MessageManager.AppendResult): EmailCreationResponse = {
     val blobId: Option[BlobId] = BlobId.of(appendResult.getId.getMessageId).toOption

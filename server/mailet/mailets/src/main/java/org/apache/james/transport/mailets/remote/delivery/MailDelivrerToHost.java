@@ -19,12 +19,12 @@
 
 package org.apache.james.transport.mailets.remote.delivery;
 
-import static com.sun.mail.smtp.SMTPMessage.NOTIFY_DELAY;
-import static com.sun.mail.smtp.SMTPMessage.NOTIFY_FAILURE;
-import static com.sun.mail.smtp.SMTPMessage.NOTIFY_NEVER;
-import static com.sun.mail.smtp.SMTPMessage.NOTIFY_SUCCESS;
-import static com.sun.mail.smtp.SMTPMessage.RETURN_FULL;
-import static com.sun.mail.smtp.SMTPMessage.RETURN_HDRS;
+import static org.eclipse.angus.mail.smtp.SMTPMessage.NOTIFY_DELAY;
+import static org.eclipse.angus.mail.smtp.SMTPMessage.NOTIFY_FAILURE;
+import static org.eclipse.angus.mail.smtp.SMTPMessage.NOTIFY_NEVER;
+import static org.eclipse.angus.mail.smtp.SMTPMessage.NOTIFY_SUCCESS;
+import static org.eclipse.angus.mail.smtp.SMTPMessage.RETURN_FULL;
+import static org.eclipse.angus.mail.smtp.SMTPMessage.RETURN_HDRS;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -32,10 +32,10 @@ import java.util.EnumSet;
 import java.util.Optional;
 import java.util.Properties;
 
-import javax.mail.MessagingException;
-import javax.mail.Session;
-import javax.mail.internet.InternetAddress;
-import javax.mail.internet.MimeMessage;
+import jakarta.mail.MessagingException;
+import jakarta.mail.Session;
+import jakarta.mail.internet.InternetAddress;
+import jakarta.mail.internet.MimeMessage;
 
 import org.apache.commons.lang3.NotImplementedException;
 import org.apache.commons.lang3.tuple.Pair;
@@ -51,13 +51,13 @@ import org.apache.mailet.HostAddress;
 import org.apache.mailet.Mail;
 import org.apache.mailet.MailetContext;
 import org.apache.mailet.base.Converter7Bit;
+import org.eclipse.angus.mail.smtp.SMTPMessage;
+import org.eclipse.angus.mail.smtp.SMTPTransport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.github.fge.lambdas.Throwing;
 import com.google.common.collect.ImmutableListMultimap;
-import com.sun.mail.smtp.SMTPMessage;
-import com.sun.mail.smtp.SMTPTransport;
 
 @SuppressWarnings("deprecation")
 public class MailDelivrerToHost {
@@ -220,7 +220,7 @@ public class MailDelivrerToHost {
             case HDRS:
                 return RETURN_HDRS;
             default:
-                throw new NotImplementedException(ret + " cannot be converted to javax.mail parameters");
+                throw new NotImplementedException(ret + " cannot be converted to jakarta.mail parameters");
         }
     }
 
@@ -241,7 +241,7 @@ public class MailDelivrerToHost {
             case DELAY:
                 return NOTIFY_DELAY;
             default:
-                throw new NotImplementedException(notify + " cannot be converted to javax.mail parameters");
+                throw new NotImplementedException(notify + " cannot be converted to jakarta.mail parameters");
         }
     }
 
