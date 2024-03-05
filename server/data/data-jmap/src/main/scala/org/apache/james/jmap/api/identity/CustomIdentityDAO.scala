@@ -146,7 +146,7 @@ trait CustomIdentityDAO {
 
   def upsert(user: Username, patch: Identity): SMono[Unit]
 
-  def delete(username: Username, ids: Seq[IdentityId]): Publisher[Unit]
+  def delete(username: Username, ids: Set[IdentityId]): Publisher[Unit]
 
   def delete(username: Username): Publisher[Unit]
 }
@@ -233,9 +233,9 @@ class IdentityRepository @Inject()(customIdentityDao: CustomIdentityDAO, identit
       .`then`()
   }
 
-  def delete(username: Username, ids: Seq[IdentityId]): Publisher[Unit] =
+  def delete(username: Username, ids: Set[IdentityId]): Publisher[Unit] =
     SMono.just(ids)
-      .handle[Seq[IdentityId]]{
+      .handle[Set[IdentityId]]{
         case (ids, sink) => if (identityFactory.isServerSetIdentity(username, ids.head)) {
           sink.error(IdentityForbiddenDeleteException(ids.head))
         } else {
@@ -259,13 +259,13 @@ object IdentityWithOrigin {
   case class CustomIdentityOrigin(inputIdentity: Identity) extends IdentityWithOrigin {
     override def identity: Identity = inputIdentity
 
-    override def merge(other: IdentityWithOrigin): IdentityWithOrigin = this
+    override def merge(other: IdentityWithOrigin): IdentityWithOrigin = CustomIdentityOrigin(identity.copy(mayDelete = MayDeleteIdentity(false)))
   }
 
   case class ServerSetIdentityOrigin(inputIdentity: Identity) extends IdentityWithOrigin {
     override def identity: Identity = inputIdentity
 
-    override def merge(other: IdentityWithOrigin): IdentityWithOrigin = other
+    override def merge(other: IdentityWithOrigin): IdentityWithOrigin = CustomIdentityOrigin(other.identity.copy(mayDelete = MayDeleteIdentity(false)))
   }
 
   def fromCustom(identity: Identity): IdentityWithOrigin = CustomIdentityOrigin(identity)
