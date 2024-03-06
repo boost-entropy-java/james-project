@@ -40,26 +40,24 @@ import org.apache.james.mime4j.message.BodyFactory;
 import org.apache.james.mime4j.util.ByteArrayOutputStreamRecycler;
 import org.apache.james.mime4j.util.ContentUtil;
 
-import com.google.common.io.CountingOutputStream;
-
 /**
  * Factory for creating message bodies.
  */
-public class AvoidBinaryBodyBufferingBodyFactory implements BodyFactory {
+public class AvoidBinaryBodyReadingBodyFactory implements BodyFactory {
 
     public static final BasicBodyFactory INSTANCE = new BasicBodyFactory();
 
     private final Charset defaultCharset;
 
-    public AvoidBinaryBodyBufferingBodyFactory() {
+    public AvoidBinaryBodyReadingBodyFactory() {
         this(true);
     }
 
-    public AvoidBinaryBodyBufferingBodyFactory(final Charset defaultCharset) {
+    public AvoidBinaryBodyReadingBodyFactory(final Charset defaultCharset) {
         this.defaultCharset = defaultCharset;
     }
 
-    public AvoidBinaryBodyBufferingBodyFactory(final boolean lenient) {
+    public AvoidBinaryBodyReadingBodyFactory(final boolean lenient) {
         this(lenient ? Charset.defaultCharset() : null);
     }
 
@@ -125,10 +123,9 @@ public class AvoidBinaryBodyBufferingBodyFactory implements BodyFactory {
         return textBody(text, Charsets.DEFAULT_CHARSET);
     }
 
-    public BinaryBody binaryBody(final InputStream is) throws IOException {
-        CountingOutputStream out = new CountingOutputStream(OutputStream.nullOutputStream());
-        is.transferTo(out);
-        return new FakeBinaryBody(out.getCount());
+
+    public BinaryBody binaryBody(final InputStream is) {
+        return new FakeBinaryBody(-1);
     }
 
     static class StringBody1 extends TextBody {
