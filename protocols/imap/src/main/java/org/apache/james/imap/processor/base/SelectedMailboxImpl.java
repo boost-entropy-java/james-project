@@ -42,7 +42,6 @@ import org.apache.james.events.Event;
 import org.apache.james.events.EventBus;
 import org.apache.james.events.EventListener;
 import org.apache.james.events.Registration;
-import org.apache.james.imap.api.process.ImapSession;
 import org.apache.james.imap.api.process.SelectedMailbox;
 import org.apache.james.mailbox.FlagsBuilder;
 import org.apache.james.mailbox.MailboxManager;
@@ -126,8 +125,6 @@ public class SelectedMailboxImpl implements SelectedMailbox, EventListener.React
     private final MessageManager messageManager;
     private final MailboxId mailboxId;
     private final EventBus eventBus;
-    private final ImapSession session;
-    private final MailboxSession.SessionId sessionId;
     private final MailboxSession mailboxSession;
     private final UidMsnConverter uidMsnConverter;
     private final Set<MessageUid> recentUids = new TreeSet<>();
@@ -141,13 +138,11 @@ public class SelectedMailboxImpl implements SelectedMailbox, EventListener.React
     private final AtomicBoolean silentFlagChanges = new AtomicBoolean(false);
     private ApplicableFlags applicableFlags = ApplicableFlags.from(new Flags());
 
-    public SelectedMailboxImpl(MailboxManager mailboxManager, EventBus eventBus, ImapSession session, MessageManager messageManager) {
+    public SelectedMailboxImpl(MailboxManager mailboxManager, EventBus eventBus, MailboxSession session, MessageManager messageManager) {
         this.eventBus = eventBus;
-        this.session = session;
-        this.sessionId = session.getMailboxSession().getSessionId();
         this.mailboxManager = mailboxManager;
         this.messageManager = messageManager;
-        this.mailboxSession = session.getMailboxSession();
+        this.mailboxSession = session;
         this.uidMsnConverter = new UidMsnConverter();
         this.mailboxId = messageManager.getId();
     }
@@ -220,7 +215,7 @@ public class SelectedMailboxImpl implements SelectedMailbox, EventListener.React
     }
 
     @Override
-    public synchronized  boolean removeRecent(MessageUid uid) {
+    public synchronized boolean removeRecent(MessageUid uid) {
         final boolean result = recentUids.remove(uid);
         if (result) {
             recentUidRemoved.set(true);
@@ -257,7 +252,7 @@ public class SelectedMailboxImpl implements SelectedMailbox, EventListener.React
     }
 
     private void checkExpungedRecents() {
-        for (MessageUid uid : expungedUids()) {
+        for (MessageUid uid : expungedUids) {
             removeRecent(uid);
         }
     }
@@ -308,22 +303,10 @@ public class SelectedMailboxImpl implements SelectedMailbox, EventListener.React
         }
         return result;
     }
-
-    
     
     @Override
     public synchronized void resetExpungedUids() {
         expungedUids.clear();
-    }
-
-    /**
-     * Are flag changes from current session ignored?
-     * 
-     * @return true if any flag changes from current session will be ignored,
-     *         false otherwise
-     */
-    public final boolean isSilentFlagChanges() {
-        return silentFlagChanges.get();
     }
 
     /**
@@ -402,9 +385,8 @@ public class SelectedMailboxImpl implements SelectedMailbox, EventListener.React
     public Publisher<Void> reactiveEvent(Event event) {
         return Mono.fromRunnable(() -> synchronizedEvent(event))
             .subscribeOn(Schedulers.boundedElastic())
-            .then(Optional.ofNullable(idleEventListener.get())
-                .map(listener -> Mono.from(listener.reactiveEvent(event)))
-                .orElse(Mono.empty()));
+            .then(Mono.fromCallable(idleEventListener::get)
+                .flatMap(listener -> Mono.from(listener.reactiveEvent(event))));
     }
 
     private synchronized void synchronizedEvent(Event event) {
@@ -432,10 +414,14 @@ public class SelectedMailboxImpl implements SelectedMailbox, EventListener.React
     }
 
     private Void handleMailboxDeletion(MailboxDeletion mailboxDeletion) {
-        if (mailboxDeletion.getSessionId() != sessionId) {
+        if (isFromOtherSession(mailboxDeletion)) {
             isDeletedByOtherSession.set(true);
         }
         return VOID;
+    }
+
+    private boolean isFromOtherSession(MailboxEvent mailboxDeletion) {
+        return mailboxDeletion.getSessionId() != mailboxSession.getSessionId();
     }
 
     private Void handleMailboxExpunge(MessageEvent messageEvent) {
@@ -445,7 +431,7 @@ public class SelectedMailboxImpl implements SelectedMailbox, EventListener.React
 
     private Void handleFlagsUpdates(FlagsUpdated updated) {
         List<UpdatedFlags> uFlags = updated.getUpdatedFlags();
-        if (sessionId != updated.getSessionId() || !silentFlagChanges.get()) {
+        if (isFromOtherSession(updated) || !silentFlagChanges.get()) {
 
             for (UpdatedFlags u : uFlags) {
                 if (interestingFlags(u)) {
@@ -454,24 +440,14 @@ public class SelectedMailboxImpl implements SelectedMailbox, EventListener.React
             }
         }
 
-        SelectedMailbox sm = session.getSelected();
-        if (sm != null) {
-            // We need to add the UID of the message to the recent
-            // list if we receive an flag update which contains a
-            // \RECENT flag
-            // See IMAP-287
-            List<UpdatedFlags> uflags = updated.getUpdatedFlags();
-            for (UpdatedFlags u : uflags) {
-                Iterator<Flag> flags = u.modifiedSystemFlags().iterator();
-
-                while (flags.hasNext()) {
-                    if (Flag.RECENT.equals(flags.next())) {
-                        MailboxId id = sm.getMailboxId();
-                        if (id != null && id.equals(updated.getMailboxId())) {
-                            sm.addRecent(u.getUid());
-                        }
-                    }
-                }
+        // We need to add the UID of the message to the recent
+        // list if we receive an flag update which contains a
+        // \RECENT flag
+        // See IMAP-287
+        List<UpdatedFlags> uflags = updated.getUpdatedFlags();
+        for (UpdatedFlags u : uflags) {
+            if (u.modifiedSystemFlags().contains(Flag.RECENT)) {
+                recentUids.add(u.getUid());
             }
         }
         long stamp = applicableFlagsLock.writeLock();
@@ -482,13 +458,8 @@ public class SelectedMailboxImpl implements SelectedMailbox, EventListener.React
 
     private Void handleAddition(Added added) {
         sizeChanged.set(true);
-        SelectedMailbox sm = session.getSelected();
-        for (MessageUid uid : added.getUids()) {
-            uidMsnConverter.addUid(uid);
-            if (sm != null) {
-                sm.addRecent(uid);
-            }
-        }
+        uidMsnConverter.addAll(added.getUids());
+        recentUids.addAll(added.getUids());
         return VOID;
     }
 
