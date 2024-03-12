@@ -273,13 +273,14 @@ public class AuthCmdHandler
                 // elements, leading to the exception we just
                 // caught.  So we need to move the user to the
                 // password, and the authorize_id to the user.
-                response = doAuthTest(session, Username.of(tokens.get(0)), tokens.get(1), AUTH_TYPE_PLAIN);
+                response = doAuthTest(session, Optional.of(Username.of(tokens.get(0))), Optional.of(tokens.get(1)), AUTH_TYPE_PLAIN);
             } else {
-                response = doAuthTest(session, Username.of(tokens.get(1)), tokens.get(2), AUTH_TYPE_PLAIN);
+                response = doAuthTest(session, Optional.of(Username.of(tokens.get(1))), Optional.of(tokens.get(2)), AUTH_TYPE_PLAIN);
             }
             session.popLineHandler();
             return response;
         } catch (Exception e) {
+            LOGGER.info("Could not decode parameters for AUTH PLAIN", e);
             return new SMTPResponse(SMTPRetCode.SYNTAX_ERROR_ARGUMENTS,"Could not decode parameters for AUTH PLAIN");
         }
     }
@@ -299,61 +300,49 @@ public class AuthCmdHandler
      * @param user the user passed in with the AUTH command
      */
     private Response doLoginAuthPass(SMTPSession session, String user) {
-        if (user != null) {
-            try {
-                user = decodeBase64(user);
-            } catch (Exception e) {
-                // Ignored - this parse error will be
-                // addressed in the if clause below
-                user = null;
-            }
-        }
-
         session.popLineHandler();
-
         session.pushLineHandler(new AbstractSMTPLineHandler() {
-
-            private Username username;
-
-            public LineHandler<SMTPSession> setUsername(Username username) {
-                this.username = username;
-                return this;
-            }
-
             @Override
             protected Response onCommand(SMTPSession session, String l) {
-                return doLoginAuthPassCheck(session, username, l);
+                return doLoginAuthPassCheck(session, asUsername(user), l);
             }
-        }.setUsername(Username.of(user)));
+        });
         return AUTH_READY_PASSWORD_LOGIN;
     }
 
-    private Response doLoginAuthPassCheck(SMTPSession session, Username username, String pass) {
-        if (pass != null) {
-            try {
-                pass = decodeBase64(pass);
-            } catch (Exception e) {
-                // Ignored - this parse error will be
-                // addressed in the if clause below
-                pass = null;
-            }
+    private Optional<Username> asUsername(String user) {
+        try {
+            return Optional.of(Username.of(decodeBase64(user)));
+        } catch (Exception e) {
+            LOGGER.info("Failed parsing base64 username {}", user, e);
+            return Optional.empty();
         }
+    }
 
+    private Response doLoginAuthPassCheck(SMTPSession session, Optional<Username> username, String pass) {
         session.popLineHandler();
-
         // Authenticate user
-        return doAuthTest(session, username, pass, "LOGIN");
+        return doAuthTest(session, username, sanitizePassword(username, pass), "LOGIN");
+    }
+
+    private Optional<String> sanitizePassword(Optional<Username> username, String pass) {
+        try {
+            return Optional.of(decodeBase64(pass));
+        } catch (Exception e) {
+            LOGGER.info("Failed parsing base64 password for user {}", username, e);
+            // Ignored - this parse error will be
+            // addressed in the if clause below
+            return Optional.empty();
+        }
     }
 
     protected Response doDelegation(SMTPSession session, Username username) {
-        Response res = null;
-
         List<AuthHook> hooks = Optional.ofNullable(getHooks())
             .orElse(List.of());
 
         for (AuthHook rawHook : hooks) {
             rawHook.doDelegation(session, username);
-            res = executeHook(session, rawHook, hook -> rawHook.doDelegation(session, username));
+            Response res = executeHook(session, rawHook, hook -> rawHook.doDelegation(session, username));
 
             if (res != null) {
                 if (SMTPRetCode.AUTH_FAILED.equals(res.getRetCode())) {
@@ -365,23 +354,20 @@ public class AuthCmdHandler
             }
         }
 
-        res = AUTH_FAILED;
         LOGGER.info("DELEGATE failed from {}@{}", username, session.getRemoteAddress().getAddress().getHostAddress());
-        return res;
+        return AUTH_FAILED;
     }
 
-    protected Response doAuthTest(SMTPSession session, Username username, String pass, String authType) {
-        if ((username == null) || (pass == null)) {
+    protected Response doAuthTest(SMTPSession session, Optional<Username> username, Optional<String> pass, String authType) {
+        if (username.isEmpty() || pass.isEmpty()) {
             return new SMTPResponse(SMTPRetCode.SYNTAX_ERROR_ARGUMENTS,"Could not decode parameters for AUTH " + authType);
         }
-
-        Response res = null;
 
         List<AuthHook> hooks = getHooks();
 
         if (hooks != null) {
             for (AuthHook rawHook : hooks) {
-                res = executeHook(session, rawHook, hook -> hook.doAuth(session, username, pass));
+                Response res = executeHook(session, rawHook, hook -> hook.doAuth(session, username.get(), pass.get()));
 
                 if (res != null) {
                     if (SMTPRetCode.AUTH_FAILED.equals(res.getRetCode())) {
@@ -391,7 +377,7 @@ public class AuthCmdHandler
                         AUTHENTICATION_DEDICATED_LOGGER.debug("AUTH method {} succeeded", authType);
 
                         AuditTrail.entry()
-                            .username(username::asString)
+                            .username(username.get()::asString)
                             .remoteIP(() -> Optional.ofNullable(session.getRemoteAddress()))
                             .sessionId(session::getSessionID)
                             .protocol("SMTP")
@@ -404,18 +390,17 @@ public class AuthCmdHandler
             }
         }
 
-        res = AUTH_FAILED;
         AUTHENTICATION_DEDICATED_LOGGER.info("AUTH method {} failed from {}@{}", authType, username, session.getRemoteAddress().getAddress().getHostAddress());
 
         AuditTrail.entry()
-            .username(username::asString)
+            .username(username.get()::asString)
             .remoteIP(() -> Optional.ofNullable(session.getRemoteAddress()))
             .protocol("SMTP")
             .action("AUTH")
             .parameters(() -> ImmutableMap.of("authType", authType))
             .log("SMTP Authentication failed.");
 
-        return res;
+        return AUTH_FAILED;
     }
 
     private Response executeHook(SMTPSession session, AuthHook rawHook, Function<AuthHook, HookResult> tc) {
@@ -548,7 +533,7 @@ public class AuthCmdHandler
         if (AuthHook.class.equals(interfaceName)) {
             this.hooks = (List<AuthHook>) extension;
             // If no AuthHook is configured then we revert to the default LocalUsersRespository check
-            if (hooks == null || hooks.size() == 0) {
+            if (hooks == null || hooks.isEmpty()) {
                 throw new WiringException("AuthCmdHandler used without AuthHooks");
             }
         } else if (HookResultHook.class.equals(interfaceName)) {
