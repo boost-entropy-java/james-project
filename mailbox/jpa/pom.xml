@@ -31,6 +31,10 @@
     <packaging>jar</packaging>
     <name>Apache James :: Mailbox :: JPA</name>
 
+    <properties>
+        <target.jdk>11</target.jdk>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>${james.groupId}</groupId>
@@ -82,6 +86,12 @@
         <dependency>
             <groupId>${james.groupId}</groupId>
             <artifactId>event-bus-in-vm</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>${james.groupId}</groupId>
+            <artifactId>james-json</artifactId>
+            <type>test-jar</type>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -155,6 +165,13 @@
                     <enforcePropertyRestrictions>true</enforcePropertyRestrictions>
                     <persistenceXmlFile>${basedir}/src/test/resources/persistence.xml</persistenceXmlFile>
                 </configuration>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.apache.xbean</groupId>
+                        <artifactId>xbean-asm9-shaded</artifactId>
+                        <version>4.23</version>
+                    </dependency>
+                </dependencies>
                 <executions>
                     <execution>
                         <id>enhancer</id>

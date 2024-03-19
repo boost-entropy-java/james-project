@@ -30,6 +30,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import com.google.common.base.Splitter;
 import javax.inject.Inject;
 
 import org.apache.james.core.Username;
@@ -40,8 +41,8 @@ import com.github.fge.lambdas.runnable.ThrowingRunnable;
 import com.google.common.base.Preconditions;
 import com.google.common.hash.Hashing;
 
-import cucumber.api.java.en.Given;
-import cucumber.runtime.java.guice.ScenarioScoped;
+import io.cucumber.guice.ScenarioScoped;
+import io.cucumber.java.en.Given;
 
 @ScenarioScoped
 public class UserStepdefs {
@@ -90,10 +91,10 @@ public class UserStepdefs {
         domains.add(domain);
     }
 
-    @Given("^some users (.*)$")
-    public void createUsers(List<String> users) {
-        users.stream()
-            .map(this::unquote)
+    @Given("^some users \"(.*)\"$")
+    public void createUsers(String users) {
+        Splitter.on(',').trimResults()
+            .splitToStream(users)
             .forEach(Throwing.consumer(this::createUser));
     }
     
