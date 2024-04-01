@@ -22,7 +22,7 @@ package org.apache.james;
 import java.util.Set;
 
 import org.apache.james.data.UsersRepositoryModuleChooser;
-import org.apache.james.eventsourcing.eventstore.cassandra.EventNestedTypes;
+import org.apache.james.eventsourcing.eventstore.EventNestedTypes;
 import org.apache.james.json.DTO;
 import org.apache.james.json.DTOModule;
 import org.apache.james.mailbox.NoACLMapper;
@@ -64,6 +64,7 @@ import org.apache.james.modules.mailbox.CassandraMailboxModule;
 import org.apache.james.modules.mailbox.CassandraMailboxQuotaLegacyModule;
 import org.apache.james.modules.mailbox.CassandraMailboxQuotaModule;
 import org.apache.james.modules.mailbox.CassandraSessionModule;
+import org.apache.james.modules.mailbox.DistributedDeletedMessageVaultModule;
 import org.apache.james.modules.mailbox.TikaMailboxModule;
 import org.apache.james.modules.mailrepository.CassandraMailRepositoryModule;
 import org.apache.james.modules.metrics.CassandraMetricsModule;
@@ -216,10 +217,15 @@ public class DistributedPOP3JamesServerMain implements JamesServerMain {
     }
 
     private static Module chooseDeletedMessageVault(VaultConfiguration vaultConfiguration) {
+        if (vaultConfiguration.isEnabled() && vaultConfiguration.isWorkQueueEnabled()) {
+            return Modules.combine(
+                new DistributedDeletedMessageVaultModule(),
+                new DeletedMessageVaultRoutesModule());
+        }
         if (vaultConfiguration.isEnabled()) {
             return Modules.combine(
-                new CassandraDeletedMessageVaultModule(),
-                new DeletedMessageVaultRoutesModule());
+                new DistributedDeletedMessageVaultModule(),
+                new CassandraDeletedMessageVaultModule());
         }
         return binder -> {
 
