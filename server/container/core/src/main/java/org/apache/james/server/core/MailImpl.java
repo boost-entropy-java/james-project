@@ -31,7 +31,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -323,7 +322,7 @@ public class MailImpl implements Disposable, Mail {
     @VisibleForTesting static String deriveNewName(String currentName) throws MessagingException {
         char separator = '!';
         int loopThreshold = 7;
-        int suffixLength = 9;
+        int suffixLength = 5;
         int suffixMaxLength = loopThreshold * suffixLength;
         int nameMaxLength = suffixMaxLength + 13;
 
@@ -342,7 +341,7 @@ public class MailImpl implements Disposable, Mail {
     }
 
     private static String generateRandomSuffix(int suffixLength, char separator) {
-        return "-" + separator + RandomStringUtils.randomNumeric(suffixLength - 2);
+        return separator + RandomStringUtils.randomAlphanumeric(suffixLength - 1);
     }
 
     private static void detectPossibleLoop(String currentName, int loopThreshold, char separator) throws MessagingException {
@@ -788,7 +787,7 @@ public class MailImpl implements Disposable, Mail {
      * @return the new identifier
      */
     public static String getId() {
-        return "Mail" + System.currentTimeMillis() + "-" + UUID.randomUUID();
+        return "Mail" + System.currentTimeMillis() + "-" + RandomStringUtils.randomAlphanumeric(20);
     }
 
     @Override
