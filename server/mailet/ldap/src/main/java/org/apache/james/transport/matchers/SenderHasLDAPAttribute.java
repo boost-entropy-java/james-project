@@ -45,7 +45,7 @@ import com.unboundid.ldap.sdk.SearchResultEntry;
 import com.unboundid.ldap.sdk.SearchScope;
 
 /**
- * Matchers that allow looking up for LDAP attributed for each recipient.
+ * Matchers that allow looking up for LDAP attributed based on the sender..
  *
  * To enable this matcher one need first to add the james-server-mailet-ldap.jar in the externals-jars folder of your
  * James installation.
@@ -53,8 +53,8 @@ import com.unboundid.ldap.sdk.SearchScope;
  * In order to match the presence of an attribute:
  *
  * <pre><code>
- * &lt;!-- Matches recipients that have the following attribute regardless of the actual value--&gt;
- * &lt;mailet matcher=&quot;HasLDAPAttibute=description&quot; class=&quot;Null&quot;&gt;
+ * &lt;!-- Matches sender that have the following attribute regardless of the actual value--&gt;
+ * &lt;mailet matcher=&quot;SenderHasLDAPAttibute=description&quot; class=&quot;Null&quot;&gt;
  *
  * &lt;/mailet&gt;
  * </code></pre>
@@ -62,13 +62,13 @@ import com.unboundid.ldap.sdk.SearchScope;
  * And in order to Match a specific value for that attribute:
  *
  * <pre><code>
- * &lt;!-- Matches recipients that have the following attribute with the specified value--&gt;
- * &lt;mailet matcher=&quot;HasLDAPAttribute=description:blocked&quot; class=&quot;Null&quot;&gt;
+ * &lt;!-- Matches sender that have the following attribute with the specified value--&gt;
+ * &lt;mailet matcher=&quot;SenderHasLDAPAttribute=description:blocked&quot; class=&quot;Null&quot;&gt;
  *
  * &lt;/mailet&gt;
  * </code></pre>
  */
-public class HasLDAPAttribute extends GenericMatcher {
+public class SenderHasLDAPAttribute extends GenericMatcher {
     private final LDAPConnectionPool ldapConnectionPool;
     private final LdapRepositoryConfiguration configuration;
     private final Filter objectClassFilter;
@@ -78,7 +78,7 @@ public class HasLDAPAttribute extends GenericMatcher {
     private String[] attributes;
 
     @Inject
-    public HasLDAPAttribute(LdapRepositoryConfiguration configuration) throws LDAPException {
+    public SenderHasLDAPAttribute(LdapRepositoryConfiguration configuration) throws LDAPException {
         this.configuration = configuration;
         ldapConnectionPool = new LDAPConnectionFactory(this.configuration).getLdapConnectionPool();
 
@@ -111,10 +111,13 @@ public class HasLDAPAttribute extends GenericMatcher {
 
     @Override
     public Collection<MailAddress> match(Mail mail) {
-        return mail.getRecipients()
-            .stream()
-            .filter(this::hasAttribute)
-            .collect(ImmutableList.toImmutableList());
+        boolean matches = mail.getMaybeSender().asOptional()
+            .map(this::hasAttribute)
+            .orElse(false);
+        if (matches) {
+            return mail.getRecipients();
+        }
+        return ImmutableList.of();
     }
 
     private boolean hasAttribute(MailAddress rcpt) {
@@ -124,9 +127,9 @@ public class HasLDAPAttribute extends GenericMatcher {
                 createFilter(rcpt.asString(), configuration.getUserIdAttribute()),
                 attributes);
 
-            return searchResult.getSearchEntries()
-                .stream()
+            return searchResult.getSearchEntries().stream()
                 .anyMatch(this::hasAttribute);
+
         } catch (LDAPSearchException e) {
             throw new RuntimeException("Failed searching LDAP", e);
         }
@@ -134,9 +137,9 @@ public class HasLDAPAttribute extends GenericMatcher {
 
     private boolean hasAttribute(SearchResultEntry entry) {
         return attributeValue.map(value -> Optional.ofNullable(entry.getAttribute(attributeName))
-            .map(Attribute::getValue)
-            .map(value::equals)
-            .orElse(false))
+                .map(Attribute::getValue)
+                .map(value::equals)
+                .orElse(false))
             .orElseGet(() -> entry.hasAttribute(attributeName));
     }
 
