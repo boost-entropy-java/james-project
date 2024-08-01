@@ -17,38 +17,28 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.blob.file;
+package org.apache.james.blob.api;
 
-import org.apache.james.blob.api.BlobId;
-import org.apache.james.blob.api.BlobStore;
-import org.apache.james.blob.api.DeleteBlobStoreContract;
-import org.apache.james.blob.api.MetricableBlobStore;
-import org.apache.james.blob.api.MetricableBlobStoreContract;
-import org.apache.james.blob.api.PlainBlobId;
-import org.apache.james.server.core.filesystem.FileSystemImpl;
-import org.junit.jupiter.api.BeforeEach;
+import com.google.common.base.Preconditions;
+import com.google.common.base.Strings;
 
-public class FileBlobStorePassThroughTest implements DeleteBlobStoreContract, MetricableBlobStoreContract {
+public record PlainBlobId(String id) implements BlobId {
+    public static class Factory implements BlobId.Factory {
 
-    private static final PlainBlobId.Factory BLOB_ID_FACTORY = new PlainBlobId.Factory();
-    private BlobStore blobStore;
+        @Override
+        public PlainBlobId of(String id) {
+            Preconditions.checkArgument(!Strings.isNullOrEmpty(id));
+            return new PlainBlobId(id);
+        }
 
-    @BeforeEach
-    void setUp() {
-        FileSystemImpl fileSystem = FileSystemImpl.forTesting();
-        blobStore = new MetricableBlobStore(metricsTestExtension.getMetricFactory(), new FileBlobStoreFactory(fileSystem).builder()
-                .blobIdFactory(BLOB_ID_FACTORY)
-                .defaultBucketName()
-                .passthrough());
+        @Override
+        public PlainBlobId parse(String id) {
+            return of(id);
+        }
     }
 
     @Override
-    public BlobStore testee() {
-        return blobStore;
-    }
-
-    @Override
-    public BlobId.Factory blobIdFactory() {
-        return BLOB_ID_FACTORY;
+    public String asString() {
+        return id;
     }
 }

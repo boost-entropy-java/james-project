@@ -17,38 +17,40 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.blob.file;
+package org.apache.james.blob.api;
 
-import org.apache.james.blob.api.BlobId;
-import org.apache.james.blob.api.BlobStore;
-import org.apache.james.blob.api.DeleteBlobStoreContract;
-import org.apache.james.blob.api.MetricableBlobStore;
-import org.apache.james.blob.api.MetricableBlobStoreContract;
-import org.apache.james.blob.api.PlainBlobId;
-import org.apache.james.server.core.filesystem.FileSystemImpl;
-import org.junit.jupiter.api.BeforeEach;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-public class FileBlobStorePassThroughTest implements DeleteBlobStoreContract, MetricableBlobStoreContract {
+import org.junit.jupiter.api.Test;
+
+import nl.jqno.equalsverifier.EqualsVerifier;
+
+class PlainBlobIdTest {
 
     private static final PlainBlobId.Factory BLOB_ID_FACTORY = new PlainBlobId.Factory();
-    private BlobStore blobStore;
 
-    @BeforeEach
-    void setUp() {
-        FileSystemImpl fileSystem = FileSystemImpl.forTesting();
-        blobStore = new MetricableBlobStore(metricsTestExtension.getMetricFactory(), new FileBlobStoreFactory(fileSystem).builder()
-                .blobIdFactory(BLOB_ID_FACTORY)
-                .defaultBucketName()
-                .passthrough());
+    @Test
+    void shouldRespectBeanContract() {
+        EqualsVerifier.forClass(PlainBlobId.class).verify();
     }
 
-    @Override
-    public BlobStore testee() {
-        return blobStore;
+    @Test
+    void fromShouldConstructBlobId() {
+        String id = "111";
+        assertThat(BLOB_ID_FACTORY.parse(id))
+            .isEqualTo(new PlainBlobId(id));
     }
 
-    @Override
-    public BlobId.Factory blobIdFactory() {
-        return BLOB_ID_FACTORY;
+    @Test
+    void fromShouldThrowOnNull() {
+        assertThatThrownBy(() -> BLOB_ID_FACTORY.parse(null))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void fromShouldThrowOnEmpty() {
+        assertThatThrownBy(() -> BLOB_ID_FACTORY.parse(""))
+            .isInstanceOf(IllegalArgumentException.class);
     }
 }
