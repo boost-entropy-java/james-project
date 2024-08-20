@@ -33,6 +33,8 @@ import jakarta.mail.internet.MimeMessage;
 import jakarta.mail.internet.MimeMultipart;
 
 import org.apache.james.transport.KeyStoreHolder;
+import org.apache.james.transport.KeyStoreHolderConfiguration;
+import org.apache.james.transport.KeyStoreHolderFactory;
 import org.apache.james.transport.SMIMESignerInfo;
 import org.apache.mailet.Attribute;
 import org.apache.mailet.AttributeName;
@@ -43,6 +45,7 @@ import org.apache.mailet.base.GenericMailet;
 import org.bouncycastle.cms.CMSException;
 import org.bouncycastle.mail.smime.SMIMEException;
 import org.bouncycastle.mail.smime.SMIMESigned;
+import org.eclipse.angus.mail.util.BASE64DecoderStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -132,23 +135,8 @@ public class SMIMECheckSignature extends GenericMailet {
         if (mailAttributeConf != null) {
             mailAttribute = AttributeName.of(mailAttributeConf);
         }
-        
-        
-        String type = config.getInitParameter("keyStoreType");
-        String file = config.getInitParameter("keyStoreFileName");
-        String password = config.getInitParameter("keyStorePassword");
-        
-        try {
-            if (file != null) {
-                trustedCertificateStore = new KeyStoreHolder(file, password, type);
-            } else {
-                LOGGER.info("No trusted store path specified, using default store.");
-                trustedCertificateStore = new KeyStoreHolder(password);
-            }
-        } catch (Exception e) {
-            throw new MessagingException("Error loading the trusted certificate store", e);
-        }
 
+        trustedCertificateStore = KeyStoreHolderFactory.createKeyStoreHolder(KeyStoreHolderConfiguration.from(config));
     }
 
     @Override
@@ -259,7 +247,7 @@ public class SMIMECheckSignature extends GenericMailet {
             signed = new SMIMESigned((MimeMultipart) message.getContent());
         } else if (obj instanceof SMIMESigned) {
             signed = (SMIMESigned) obj;
-        } else if (obj instanceof byte[]) {
+        } else if (obj instanceof byte[] || obj instanceof BASE64DecoderStream) {
             signed = new SMIMESigned(message);
         } else {
             signed = null;

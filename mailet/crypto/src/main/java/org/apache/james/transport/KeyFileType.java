@@ -17,14 +17,15 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.mailbox.opensearch;
+package org.apache.james.transport;
 
-class OpenSearchOptimizeMoveIntegrationTest extends OpenSearchIntegrationTest {
+import java.util.Optional;
 
-    @Override
-    protected OpenSearchMailboxConfiguration openSearchMailboxConfiguration() {
-        return OpenSearchMailboxConfiguration.builder()
-            .optimiseMoves(true)
-            .build();
+public enum KeyFileType {
+    KEYSTORE,
+    PEM;
+
+    static KeyFileType parse(Optional<String> maybeString) {
+        return maybeString.map(type -> KeyFileType.valueOf(type.toUpperCase())).orElse(KeyFileType.KEYSTORE);
     }
 }
