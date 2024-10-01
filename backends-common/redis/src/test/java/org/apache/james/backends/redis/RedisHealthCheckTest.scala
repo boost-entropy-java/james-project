@@ -17,27 +17,47 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.rate.limiter
+package org.apache.james.backends.redis
 
-import java.time.Duration
+import java.util.concurrent.TimeUnit
 
-import org.apache.james.backends.redis.{DockerRedis, RedisConfiguration, RedisExtension, StandaloneRedisConfiguration}
-import org.apache.james.rate.limiter.api.{RateLimiterContract, RateLimiterFactory}
-import org.apache.james.rate.limiter.redis.RedisRateLimiterFactory
-import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.extension.ExtendWith
+import org.assertj.core.api.Assertions.assertThat
+import org.awaitility.Awaitility
+import org.junit.jupiter.api.Test
+import reactor.core.scala.publisher.SMono
 
-@ExtendWith(Array(classOf[RedisExtension]))
-class RedisRateLimiterTest extends RateLimiterContract {
+trait RedisHealthCheckTest {
+  def getRedisHealthCheck(): RedisHealthCheck
 
-  var redisRateLimiterConfiguration: RedisConfiguration = _
+  def pauseRedis(): Unit
 
-  @BeforeEach
-  def setup(redis: DockerRedis): Unit = {
-    redisRateLimiterConfiguration = StandaloneRedisConfiguration.from(redis.redisURI().toString)
+  def unpauseRedis(): Unit
+
+  @Test
+  def checkShouldReturnHealthyWhenRedisIsRunning(): Unit = {
+    val result = SMono.fromPublisher(getRedisHealthCheck().check()).block()
+
+    assertThat(result.isHealthy).isTrue
   }
 
-  override def testee(): RateLimiterFactory = new RedisRateLimiterFactory(redisRateLimiterConfiguration)
+  @Test
+  def checkShouldReturnDegradedWhenRedisIsDown(): Unit = {
+    pauseRedis()
 
-  override def sleep(duration: Duration): Unit = Thread.sleep(duration.toMillis)
+    Awaitility.await()
+      .pollInterval(2, TimeUnit.SECONDS)
+      .atMost(20, TimeUnit.SECONDS)
+      .untilAsserted(() => assertThat(SMono.fromPublisher(getRedisHealthCheck().check()).block().isDegraded).isTrue)
+  }
+
+  @Test
+  def checkShouldReturnHealthyWhenRedisIsRecovered(): Unit = {
+    pauseRedis()
+    unpauseRedis()
+
+    Awaitility.await()
+      .pollInterval(2, TimeUnit.SECONDS)
+      .atMost(20, TimeUnit.SECONDS)
+      .untilAsserted(() => assertThat(SMono.fromPublisher(getRedisHealthCheck().check()).block().isHealthy).isTrue)
+  }
 }

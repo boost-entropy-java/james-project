@@ -23,16 +23,20 @@ import com.google.common.base.{MoreObjects, Preconditions}
 import eu.timepit.refined
 import eu.timepit.refined.api.Refined
 import eu.timepit.refined.collection.NonEmpty
-import io.lettuce.core.{ReadFrom, RedisURI}
+import io.lettuce.core.{ReadFrom, RedisCredentials, RedisCredentialsProvider, RedisURI}
 import org.apache.commons.configuration2.Configuration
-import org.apache.james.backends.redis.RedisConfiguration.{CLUSTER_TOPOLOGY, MASTER_REPLICA_TOPOLOGY, STANDALONE_TOPOLOGY}
+import org.apache.james.backends.redis.RedisConfiguration.{CLUSTER_TOPOLOGY, MASTER_REPLICA_TOPOLOGY, REDIS_READ_FROM_DEFAULT_VALUE, REDIS_READ_FROM_PROPERTY_NAME, REDIS_SENTINEL_PASSWORD, SENTINEL_TOPOLOGY, STANDALONE_TOPOLOGY}
 import org.apache.james.backends.redis.RedisUris.{REDIS_URL_PROPERTY_NAME, RedisUris}
 import org.slf4j.{Logger, LoggerFactory}
 
 object RedisConfiguration {
+  val REDIS_READ_FROM_PROPERTY_NAME = "redis.readFrom"
+  val REDIS_SENTINEL_PASSWORD = "redis.sentinelPassword"
   val STANDALONE_TOPOLOGY = "standalone"
   val CLUSTER_TOPOLOGY = "cluster"
   val MASTER_REPLICA_TOPOLOGY = "master-replica"
+  val SENTINEL_TOPOLOGY = "sentinel"
+  val REDIS_READ_FROM_DEFAULT_VALUE = ReadFrom.MASTER
 
   val LOGGER: Logger = LoggerFactory.getLogger(classOf[RedisConfiguration])
 
@@ -45,6 +49,7 @@ object RedisConfiguration {
       case STANDALONE_TOPOLOGY => StandaloneRedisConfiguration.from(config)
       case CLUSTER_TOPOLOGY => ClusterRedisConfiguration.from(config)
       case MASTER_REPLICA_TOPOLOGY => MasterReplicaRedisConfiguration.from(config)
+      case SENTINEL_TOPOLOGY => SentinelRedisConfiguration.from(config)
       case _ => throw new IllegalArgumentException("Invalid topology")
     }
 
@@ -155,6 +160,32 @@ case class ClusterRedisConfiguration(redisURI: RedisUris, ioThreads: Option[Int]
   override def asString: String = MoreObjects.toStringHelper(this)
     .add("topology", CLUSTER_TOPOLOGY)
     .add("redisURI", redisURI.value.map(_.toString).mkString(";"))
+    .add("redis.ioThreads", ioThreads)
+    .add("redis.workerThreads", workerThreads)
+    .toString
+}
+
+object SentinelRedisConfiguration {
+  def from(config: Configuration): SentinelRedisConfiguration = from(
+    config.getStringArray(REDIS_URL_PROPERTY_NAME).mkString(","),
+    Option(config.getString(REDIS_READ_FROM_PROPERTY_NAME, null)).map(ReadFrom.valueOf).getOrElse(REDIS_READ_FROM_DEFAULT_VALUE),
+    Option(config.getString(REDIS_SENTINEL_PASSWORD, null)),
+    RedisConfiguration.redisIoThreadsFrom(config),
+    RedisConfiguration.redisWorkerThreadsFrom(config))
+
+  def from(redisUri: String, readFrom: ReadFrom, sentinelPassword: String): SentinelRedisConfiguration = from(redisUri, readFrom, Option.apply(sentinelPassword), None, None)
+
+  def from(redisUriString: String, readFrom: ReadFrom, maybeSentinelPassword: Option[String], ioThreads: Option[Int] = None, workerThreads: Option[Int] = None): SentinelRedisConfiguration = {
+    val redisURI = RedisURI.create(redisUriString)
+    maybeSentinelPassword.foreach(password => redisURI.getSentinels.forEach(uri => uri.setCredentialsProvider(RedisCredentialsProvider.from(() => RedisCredentials.just("", password)))))
+    SentinelRedisConfiguration(redisURI, readFrom, ioThreads, workerThreads)
+  }
+}
+
+case class SentinelRedisConfiguration(redisURI: RedisURI, readFrom: ReadFrom, ioThreads: Option[Int], workerThreads: Option[Int]) extends RedisConfiguration {
+  override def asString: String = MoreObjects.toStringHelper(this)
+    .add("topology", SENTINEL_TOPOLOGY)
+    .add("redisURI", redisURI.toString)
     .add("redis.ioThreads", ioThreads)
     .add("redis.workerThreads", workerThreads)
     .toString

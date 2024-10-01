@@ -1,4 +1,4 @@
-/** **************************************************************
+/****************************************************************
  * Licensed to the Apache Software Foundation (ASF) under one   *
  * or more contributor license agreements.  See the NOTICE file *
  * distributed with this work for additional information        *
@@ -6,16 +6,16 @@
  * to you under the Apache License, Version 2.0 (the            *
  * "License"); you may not use this file except in compliance   *
  * with the License.  You may obtain a copy of the License at   *
- * *
+ *                                                              *
  * http://www.apache.org/licenses/LICENSE-2.0                   *
- * *
+ *                                                              *
  * Unless required by applicable law or agreed to in writing,   *
  * software distributed under the License is distributed on an  *
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY       *
  * KIND, either express or implied.  See the License for the    *
  * specific language governing permissions and limitations      *
  * under the License.                                           *
- * ************************************************************** */
+ ****************************************************************/
 
 package org.apache.james.backends.redis
 
@@ -93,27 +93,27 @@ class RedisConfigurationTest extends AnyFlatSpec with Matchers {
     val config = new PropertiesConfiguration()
     config.setListDelimiterHandler(new DefaultListDelimiterHandler(','))
     config.addProperty("redisURL", "redis-sentinel://secret1@redis-sentinel-1:26379,redis-sentinel-2:26379,redis-sentinel-3:26379?sentinelMasterId=mymaster")
-    config.addProperty("redis.topology", "master-replica")
+    config.addProperty("redis.topology", "sentinel")
 
     val redisConfig: RedisConfiguration = RedisConfiguration.from(config)
-    redisConfig.isInstanceOf[MasterReplicaRedisConfiguration] shouldEqual (true)
-    val redisMasterReplicaRedisConfiguration = redisConfig.asInstanceOf[MasterReplicaRedisConfiguration]
+    redisConfig.isInstanceOf[SentinelRedisConfiguration] shouldEqual (true)
+    val redisConfiguration = redisConfig.asInstanceOf[SentinelRedisConfiguration]
 
-    redisMasterReplicaRedisConfiguration.redisURI.value.size shouldEqual 1
-    redisMasterReplicaRedisConfiguration.redisURI.value.head.toString shouldEqual "redis-sentinel://*******@redis-sentinel-1,redis-sentinel-2,redis-sentinel-3?sentinelMasterId=mymaster"
+    redisConfiguration.redisURI.toString shouldEqual "redis-sentinel://*******@redis-sentinel-1,redis-sentinel-2,redis-sentinel-3?sentinelMasterId=mymaster"
   }
 
   it should "parse redisURL when single sentinel endpoint" in {
     val config = new PropertiesConfiguration()
     config.setListDelimiterHandler(new DefaultListDelimiterHandler(','))
     config.addProperty("redisURL", "redis-sentinel://secret1@redis-sentinel-1:26379?sentinelMasterId=mymaster")
-    config.addProperty("redis.topology", "master-replica")
+    config.addProperty("redis.topology", "sentinel")
+    config.addProperty("redis.sentinelPassword", "sentinelpass")
 
     val redisConfig: RedisConfiguration = RedisConfiguration.from(config)
-    redisConfig.isInstanceOf[MasterReplicaRedisConfiguration] shouldEqual (true)
-    val redisMasterReplicaRedisConfiguration = redisConfig.asInstanceOf[MasterReplicaRedisConfiguration]
+    redisConfig.isInstanceOf[SentinelRedisConfiguration] shouldEqual (true)
+    val redisConfiguration = redisConfig.asInstanceOf[SentinelRedisConfiguration]
 
-    redisMasterReplicaRedisConfiguration.redisURI.value.size shouldEqual 1
-    redisMasterReplicaRedisConfiguration.redisURI.value.head.toString shouldEqual "redis-sentinel://*******@redis-sentinel-1?sentinelMasterId=mymaster"
+    redisConfiguration.redisURI.toString shouldEqual "redis-sentinel://*******@redis-sentinel-1?sentinelMasterId=mymaster"
+    redisConfiguration.redisURI.getSentinels.get(0).getCredentialsProvider.resolveCredentials().block().getPassword shouldEqual "sentinelpass".toCharArray
   }
 }

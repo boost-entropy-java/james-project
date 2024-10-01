@@ -26,13 +26,13 @@ import java.util.concurrent.TimeUnit
 import eu.timepit.refined.auto._
 import org.apache.james.backends.redis.RedisSentinelExtension
 import org.apache.james.backends.redis.RedisSentinelExtension.RedisSentinelCluster
-import org.apache.james.rate.limiter.RedisRateLimiterWithMasterReplicaTopologyTest.{RULES, SLIDING_WIDOW_PRECISION}
+import org.apache.james.rate.limiter.RedisRateLimiterWithSentinelTest.{RULES, SLIDING_WIDOW_PRECISION}
 import org.apache.james.rate.limiter.api._
 import org.apache.james.rate.limiter.redis.RedisRateLimiterFactory
 import org.assertj.core.api.Assertions.{assertThat, assertThatCode}
 import org.awaitility.Awaitility
-import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.api.extension.ExtendWith
+import org.junit.jupiter.api.{AfterEach, Test}
 import reactor.core.scala.publisher.SMono
 
 object RedisRateLimiterWithSentinelTest {
@@ -45,6 +45,7 @@ class RedisRateLimiterWithSentinelTest {
 
   @AfterEach
   def afterEach(redisClusterContainer: RedisSentinelCluster): Unit = {
+    redisClusterContainer.redisSentinelContainerList().unPauseFirstNode()
     redisClusterContainer.redisMasterReplicaContainerList.unPauseMasterNode()
   }
 
@@ -73,6 +74,8 @@ class RedisRateLimiterWithSentinelTest {
     assertThat(SMono(rateLimiter.rateLimit(TestKey("key" + UUID.randomUUID().toString), 5)).block())
       .isEqualTo(RateExceeded)
 
+    // Pause first sentinel node
+    redisClusterContainer.redisSentinelContainerList().pauseFirstNode()
     // Give stop redis-master node
     redisClusterContainer.redisMasterReplicaContainerList.pauseMasterNode()
     // Sleep for a while to let sentinel detect the failover. Here is 5 seconds
@@ -81,7 +84,7 @@ class RedisRateLimiterWithSentinelTest {
     // After failover, the rate limit should be working normally
     Awaitility.await()
       .pollInterval(2, TimeUnit.SECONDS)
-      .atMost(20, TimeUnit.SECONDS)
+      .atMost(100, TimeUnit.SECONDS)
       .untilAsserted(() => assertThatCode(() => SMono(rateLimiter.rateLimit(TestKey("key" + UUID.randomUUID().toString), 1)).block())
         .doesNotThrowAnyException())
 

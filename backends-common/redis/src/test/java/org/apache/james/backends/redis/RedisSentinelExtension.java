@@ -19,7 +19,6 @@
 
 package org.apache.james.backends.redis;
 
-import static java.lang.Boolean.TRUE;
 import static org.apache.james.backends.redis.DockerRedis.DEFAULT_IMAGE_NAME;
 
 import java.time.Duration;
@@ -44,17 +43,16 @@ import org.testcontainers.containers.Network;
 import org.testcontainers.containers.wait.strategy.Wait;
 
 import com.github.fge.lambdas.Throwing;
-import com.google.common.collect.ImmutableList;
 import com.google.inject.AbstractModule;
 import com.google.inject.Module;
 import com.google.inject.Provides;
 
 import io.lettuce.core.ReadFrom;
 import scala.Function2;
-import scala.jdk.javaapi.OptionConverters;
 
 public class RedisSentinelExtension implements GuiceModuleTestExtension {
     public static final int SENTINEL_PORT = 26379;
+    public static final String SENTINEL_PASSWORD = "321";
 
     public static class RedisMasterReplicaContainerList extends ArrayList<GenericContainer> {
         public RedisMasterReplicaContainerList(Collection<? extends GenericContainer> c) {
@@ -68,10 +66,10 @@ public class RedisSentinelExtension implements GuiceModuleTestExtension {
 
         public void unPauseMasterNode() {
             GenericContainer container = this.get(0);
-            if (TRUE.equals(container.getDockerClient().inspectContainerCmd(container.getContainerId())
+            if (container.getDockerClient().inspectContainerCmd(container.getContainerId())
                 .exec()
                 .getState()
-                .getPaused())) {
+                .getPaused()) {
                 container.getDockerClient().unpauseContainerCmd(container.getContainerId()).exec();
             }
         }
@@ -82,12 +80,25 @@ public class RedisSentinelExtension implements GuiceModuleTestExtension {
             super(c);
         }
 
-        public MasterReplicaRedisConfiguration getRedisConfiguration() {
-            return MasterReplicaRedisConfiguration.from(ImmutableList.of(createRedisSentinelURI(this))
-                    .toArray(String[]::new),
+        public SentinelRedisConfiguration getRedisConfiguration() {
+            return SentinelRedisConfiguration.from(createRedisSentinelURI(this),
                 ReadFrom.MASTER,
-                OptionConverters.toScala(Optional.empty()),
-                OptionConverters.toScala(Optional.empty()));
+                SENTINEL_PASSWORD);
+        }
+
+        public void pauseFirstNode() {
+            GenericContainer container = this.get(0);
+            container.getDockerClient().pauseContainerCmd(container.getContainerId()).exec();
+        }
+
+        public void unPauseFirstNode() {
+            GenericContainer container = this.get(0);
+            if (container.getDockerClient().inspectContainerCmd(container.getContainerId())
+                .exec()
+                .getState()
+                .getPaused()) {
+                container.getDockerClient().unpauseContainerCmd(container.getContainerId()).exec();
+            }
         }
     }
 
@@ -100,7 +111,7 @@ public class RedisSentinelExtension implements GuiceModuleTestExtension {
             .withCreateContainerCmdModifier(createContainerCmd -> createContainerCmd.withName("james-" + alias + "-test-" + UUID.randomUUID()))
             .withCommand(Optional.of(isSlave).filter(aBoolean -> aBoolean)
                 .map(aBoolean -> "redis-server --appendonly yes --port 6379 --slaveof redis1 6379 --requirepass 1 --masterauth 1")
-                .orElse("redis-server --appendonly yes --port 6379 --requirepass 1"))
+                .orElse("redis-server --appendonly yes --port 6379 --requirepass 1 --masterauth 1"))
             .withNetworkAliases(alias)
             .waitingFor(Wait.forLogMessage(".*Ready to accept connections.*", 1)
                 .withStartupTimeout(Duration.ofMinutes(2)));

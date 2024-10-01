@@ -21,23 +21,28 @@ package org.apache.james.rate.limiter
 
 import java.time.Duration
 
-import org.apache.james.backends.redis.{DockerRedis, RedisConfiguration, RedisExtension, StandaloneRedisConfiguration}
-import org.apache.james.rate.limiter.api.{RateLimiterContract, RateLimiterFactory}
+import eu.timepit.refined.auto._
+import org.apache.james.backends.redis.RedisConfiguration
+import org.apache.james.rate.limiter.TopologyRedisRateLimiterTest.{RULES, SLIDING_WIDOW_PRECISION}
+import org.apache.james.rate.limiter.api.{AcceptableRate, RateLimitingResult, Rule, Rules, TestKey}
 import org.apache.james.rate.limiter.redis.RedisRateLimiterFactory
-import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.extension.ExtendWith
+import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.Test
+import reactor.core.scala.publisher.SMono
 
-@ExtendWith(Array(classOf[RedisExtension]))
-class RedisRateLimiterTest extends RateLimiterContract {
+object TopologyRedisRateLimiterTest {
+  val SLIDING_WIDOW_PRECISION: Option[Duration] = Some(Duration.ofSeconds(1))
+  val RULES = Rules(Seq(Rule(4L, Duration.ofSeconds(2))))
+}
 
-  var redisRateLimiterConfiguration: RedisConfiguration = _
+trait TopologyRedisRateLimiterTest {
+  def getRedisConfiguration(): RedisConfiguration
 
-  @BeforeEach
-  def setup(redis: DockerRedis): Unit = {
-    redisRateLimiterConfiguration = StandaloneRedisConfiguration.from(redis.redisURI().toString)
+  @Test
+  def rateLimitShouldWorkNormally(): Unit = {
+    val rateLimiterFactory: RedisRateLimiterFactory = new RedisRateLimiterFactory(getRedisConfiguration())
+    val rateLimiter = rateLimiterFactory.withSpecification(RULES, SLIDING_WIDOW_PRECISION)
+    val actual: RateLimitingResult = SMono(rateLimiter.rateLimit(TestKey("key1"), 4)).block()
+    assertThat(actual).isEqualTo(AcceptableRate)
   }
-
-  override def testee(): RateLimiterFactory = new RedisRateLimiterFactory(redisRateLimiterConfiguration)
-
-  override def sleep(duration: Duration): Unit = Thread.sleep(duration.toMillis)
 }
