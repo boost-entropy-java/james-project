@@ -17,47 +17,21 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.backends.redis
+package org.apache.james.rate.limiter
 
-import java.util.concurrent.TimeUnit
+import org.apache.james.backends.redis.RedisTLSExtension.RedisContainer
+import org.apache.james.backends.redis.{RedisConfiguration, RedisTLSExtension}
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.extension.ExtendWith
 
-import org.assertj.core.api.Assertions.assertThat
-import org.awaitility.Awaitility
-import org.junit.jupiter.api.Test
-import reactor.core.scala.publisher.SMono
+@ExtendWith(Array(classOf[RedisTLSExtension]))
+class RedisRateLimiterWithTLSTest extends TopologyRedisRateLimiterTest {
+  var redisContainer: RedisContainer = _
 
-trait RedisHealthCheckTest {
-  def getRedisHealthCheck(): RedisHealthCheck
+  def getRedisConfiguration(): RedisConfiguration = redisContainer.getConfiguration
 
-  def pauseRedis(): Unit
-
-  def unpauseRedis(): Unit
-
-  @Test
-  def checkShouldReturnHealthyWhenRedisIsRunning(): Unit = {
-    val result = SMono.fromPublisher(getRedisHealthCheck().check()).block()
-
-    assertThat(result.isHealthy).isTrue
-  }
-
-  @Test
-  def checkShouldReturnDegradedWhenRedisIsDown(): Unit = {
-    pauseRedis()
-
-    Awaitility.await()
-      .pollInterval(2, TimeUnit.SECONDS)
-      .atMost(20, TimeUnit.SECONDS)
-      .untilAsserted(() => assertThat(SMono.fromPublisher(getRedisHealthCheck().check()).block().isDegraded).isTrue)
-  }
-
-  @Test
-  def checkShouldReturnHealthyWhenRedisIsRecovered(): Unit = {
-    pauseRedis()
-    unpauseRedis()
-
-    Awaitility.await()
-      .pollInterval(2, TimeUnit.SECONDS)
-      .atMost(20, TimeUnit.SECONDS)
-      .untilAsserted(() => assertThat(SMono.fromPublisher(getRedisHealthCheck().check()).block().isHealthy).isTrue)
+  @BeforeEach
+  def beforeEach(redisContainer: RedisContainer): Unit = {
+    this.redisContainer = redisContainer
   }
 }

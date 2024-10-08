@@ -77,6 +77,22 @@ class TikaTextExtractorTest {
     }
 
     @Test
+    void shouldReturnEmptyParsedContentWhenTimeoutTriggered() throws Exception {
+        textExtractor = new TikaTextExtractor(new RecordingMetricFactory(), new TikaHttpClientImpl(TikaConfiguration.builder()
+            .host(tika.getIp())
+            .port(tika.getPort())
+            .timeoutInMillis(1)
+            .build()));
+
+        InputStream inputStream = ClassLoader.getSystemResourceAsStream("documents/writter.docx");
+
+        assertThat(textExtractor.extractContentReactive(inputStream,
+                ContentType.of("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+            .block())
+            .isEqualTo(ParsedContent.empty());
+    }
+
+    @Test
     void textMicrosoftWorldTest() throws Exception {
         InputStream inputStream = ClassLoader.getSystemResourceAsStream("documents/writter.docx");
         assertThat(inputStream).isNotNull();

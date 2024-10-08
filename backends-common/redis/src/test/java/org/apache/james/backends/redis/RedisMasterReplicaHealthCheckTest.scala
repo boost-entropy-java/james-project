@@ -20,6 +20,7 @@
 package org.apache.james.backends.redis
 
 import org.apache.james.backends.redis.RedisMasterReplicaExtension.RedisMasterReplicaContainer
+import org.apache.james.server.core.filesystem.FileSystemImpl
 import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 
@@ -30,7 +31,7 @@ class RedisMasterReplicaHealthCheckTest extends RedisHealthCheckTest {
 
   @BeforeEach
   def setup(redis: RedisMasterReplicaContainer): Unit = {
-    redisHealthCheck = new RedisHealthCheck(redis.getRedisConfiguration)
+    redisHealthCheck = new RedisHealthCheck(redis.getRedisConfiguration, new RedisClientFactory(FileSystemImpl.forTesting()))
     redisMasterReplicaContainer = redis
   }
 
