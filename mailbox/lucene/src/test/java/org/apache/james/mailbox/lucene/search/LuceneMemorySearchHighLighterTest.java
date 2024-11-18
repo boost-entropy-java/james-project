@@ -38,6 +38,7 @@ import org.apache.james.mailbox.searchhighligt.SearchHighlighter;
 import org.apache.james.mailbox.searchhighligt.SearchHighlighterConfiguration;
 import org.apache.james.mailbox.store.StoreMailboxManager;
 import org.apache.james.mailbox.store.StoreMessageManager;
+import org.apache.james.mailbox.store.extractor.JsoupTextExtractor;
 import org.apache.james.mailbox.store.search.MessageSearchIndex;
 import org.apache.lucene.store.ByteBuffersDirectory;
 import org.junit.jupiter.api.BeforeEach;
@@ -62,7 +63,7 @@ class LuceneMemorySearchHighLighterTest implements SearchHighLighterContract {
             .listeningSearchIndex(Throwing.function(preInstanciationStage -> new LuceneMessageSearchIndex(
                 preInstanciationStage.getMapperFactory(), new InMemoryId.Factory(), new ByteBuffersDirectory(),
                 messageIdFactory,
-                preInstanciationStage.getSessionProvider())))
+                preInstanciationStage.getSessionProvider(), new JsoupTextExtractor())))
             .noPreDeletionHooks()
             .storeQuotaManager()
             .build();
@@ -112,4 +113,5 @@ class LuceneMemorySearchHighLighterTest implements SearchHighLighterContract {
             MailboxACL.command().forUser(delegated).rights(MailboxACL.FULL_RIGHTS).asAddition(),
             session(owner))).run();
     }
+
 }
