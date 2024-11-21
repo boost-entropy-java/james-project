@@ -17,33 +17,31 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.modules.server;
+package org.apache.james.core;
 
-import org.apache.james.DisconnectorNotifier;
-import org.apache.james.core.Disconnector;
-import org.apache.james.protocols.lib.netty.AbstractServerFactory;
-import org.apache.james.protocols.webadmin.ProtocolServerRoutes;
-import org.apache.james.webadmin.Routes;
+import java.util.Set;
+import java.util.function.Predicate;
 
-import com.google.inject.AbstractModule;
-import com.google.inject.Scopes;
-import com.google.inject.multibindings.Multibinder;
+import jakarta.inject.Inject;
 
-public class ServerRouteModule extends AbstractModule {
-    @Override
-    protected void configure() {
-        Multibinder.newSetBinder(binder(), AbstractServerFactory.class);
+public interface Disconnector {
+    Disconnector NOOP = user -> {
 
-        Multibinder.newSetBinder(binder(), Routes.class)
-            .addBinding()
-            .to(ProtocolServerRoutes.class);
+    };
 
-        Multibinder.newSetBinder(binder(), Disconnector.class);
+    void disconnect(Predicate<Username> username);
 
-        bind(Disconnector.class).to(Disconnector.CompositeDisconnector.class);
-        bind(Disconnector.CompositeDisconnector.class).in(Scopes.SINGLETON);
+    class CompositeDisconnector implements Disconnector {
+        private final Set<Disconnector> disconnectorSet;
 
-        bind(DisconnectorNotifier.class).to(DisconnectorNotifier.InVMDisconnectorNotifier.class);
-        bind(DisconnectorNotifier.InVMDisconnectorNotifier.class).in(Scopes.SINGLETON);
+        @Inject
+        public CompositeDisconnector(Set<Disconnector> disconnectorSet) {
+            this.disconnectorSet = disconnectorSet;
+        }
+
+        @Override
+        public void disconnect(Predicate<Username> username) {
+            disconnectorSet.forEach(disconnector -> disconnector.disconnect(username));
+        }
     }
 }

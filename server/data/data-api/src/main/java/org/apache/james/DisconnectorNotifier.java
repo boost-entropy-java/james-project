@@ -17,33 +17,27 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.modules.server;
+package org.apache.james;
 
-import org.apache.james.DisconnectorNotifier;
+import java.util.function.Predicate;
+
+import jakarta.inject.Inject;
+
 import org.apache.james.core.Disconnector;
-import org.apache.james.protocols.lib.netty.AbstractServerFactory;
-import org.apache.james.protocols.webadmin.ProtocolServerRoutes;
-import org.apache.james.webadmin.Routes;
+import org.apache.james.core.Username;
 
-import com.google.inject.AbstractModule;
-import com.google.inject.Scopes;
-import com.google.inject.multibindings.Multibinder;
+public interface DisconnectorNotifier extends Disconnector {
+    class InVMDisconnectorNotifier implements DisconnectorNotifier {
+        private final Disconnector disconnector;
 
-public class ServerRouteModule extends AbstractModule {
-    @Override
-    protected void configure() {
-        Multibinder.newSetBinder(binder(), AbstractServerFactory.class);
+        @Inject
+        public InVMDisconnectorNotifier(Disconnector disconnector) {
+            this.disconnector = disconnector;
+        }
 
-        Multibinder.newSetBinder(binder(), Routes.class)
-            .addBinding()
-            .to(ProtocolServerRoutes.class);
-
-        Multibinder.newSetBinder(binder(), Disconnector.class);
-
-        bind(Disconnector.class).to(Disconnector.CompositeDisconnector.class);
-        bind(Disconnector.CompositeDisconnector.class).in(Scopes.SINGLETON);
-
-        bind(DisconnectorNotifier.class).to(DisconnectorNotifier.InVMDisconnectorNotifier.class);
-        bind(DisconnectorNotifier.InVMDisconnectorNotifier.class).in(Scopes.SINGLETON);
+        @Override
+        public void disconnect(Predicate<Username> username) {
+            disconnector.disconnect(username);
+        }
     }
 }
