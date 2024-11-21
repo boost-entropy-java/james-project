@@ -17,25 +17,28 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.blob.objectstorage.aws;
+package org.apache.james.blob.objectstorage.aws.sse;
 
-import static org.apache.james.blob.api.BlobStoreDAOFixture.SHORT_BYTEARRAY;
-import static org.apache.james.blob.api.BlobStoreDAOFixture.TEST_BLOB_ID;
 import static org.apache.james.blob.api.BlobStoreDAOFixture.TEST_BUCKET_NAME;
+import static org.apache.james.blob.objectstorage.aws.JamesS3MetricPublisher.DEFAULT_S3_METRICS_PREFIX;
 import static org.apache.james.blob.objectstorage.aws.S3BlobStoreConfiguration.UPLOAD_RETRY_EXCEPTION_PREDICATE;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 
-import org.apache.james.blob.api.BlobId;
 import org.apache.james.blob.api.BlobStoreDAO;
 import org.apache.james.blob.api.BlobStoreDAOContract;
 import org.apache.james.blob.api.TestBlobId;
+import org.apache.james.blob.objectstorage.aws.JamesS3MetricPublisher;
+import org.apache.james.blob.objectstorage.aws.Region;
+import org.apache.james.blob.objectstorage.aws.S3BlobStoreConfiguration;
+import org.apache.james.blob.objectstorage.aws.S3BlobStoreDAO;
+import org.apache.james.blob.objectstorage.aws.S3ClientFactory;
+import org.apache.james.blob.objectstorage.aws.S3MinioExtension;
+import org.apache.james.blob.objectstorage.aws.S3RequestOption;
 import org.apache.james.metrics.api.NoopGaugeRegistry;
 import org.apache.james.metrics.tests.RecordingMetricFactory;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
@@ -43,11 +46,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
-import software.amazon.awssdk.services.s3.model.S3Exception;
+import software.amazon.awssdk.services.s3.S3AsyncClient;
 
-public class S3MinioTest implements BlobStoreDAOContract {
+public class S3BlobStoreDAOWithSSECTest implements BlobStoreDAOContract, S3SSECContract {
 
     @RegisterExtension
     static S3MinioExtension minoExtension = new S3MinioExtension();
@@ -56,34 +58,38 @@ public class S3MinioTest implements BlobStoreDAOContract {
     private static S3ClientFactory s3ClientFactory;
 
     @BeforeAll
-    static void setUp() {
-        AwsS3AuthConfiguration awsS3AuthConfiguration = minoExtension.minioDocker().getAwsS3AuthConfiguration();
-
+    static void setUp() throws Exception {
         S3BlobStoreConfiguration s3Configuration = S3BlobStoreConfiguration.builder()
-            .authConfiguration(awsS3AuthConfiguration)
-            .region(DockerAwsS3Container.REGION)
+            .authConfiguration(minoExtension.minioDocker().getAwsS3AuthConfiguration())
+            .region(Region.of(software.amazon.awssdk.regions.Region.EU_WEST_1.id()))
             .uploadRetrySpec(Optional.of(Retry.backoff(3, java.time.Duration.ofSeconds(1))
                 .filter(UPLOAD_RETRY_EXCEPTION_PREDICATE)))
             .build();
 
-        s3ClientFactory = new S3ClientFactory(s3Configuration, new RecordingMetricFactory(), new NoopGaugeRegistry());
-        testee = new S3BlobStoreDAO(s3ClientFactory, s3Configuration, new TestBlobId.Factory());
-    }
+        s3ClientFactory = new S3ClientFactory(s3Configuration, () -> new JamesS3MetricPublisher(new RecordingMetricFactory(), new NoopGaugeRegistry(),
+            DEFAULT_S3_METRICS_PREFIX));
 
-    @AfterAll
-    static void tearDownClass() {
-        s3ClientFactory.close();
+        S3SSECustomerKeyFactory sseCustomerKeyFactory = new S3SSECustomerKeyFactory.SingleCustomerKeyFactory(new S3SSECConfiguration.Basic("AES256", "masterPassword", "salt"));
+
+        S3RequestOption s3RequestOption = new S3RequestOption(new S3RequestOption.SSEC(true, Optional.of(sseCustomerKeyFactory)));
+        testee = new S3BlobStoreDAO(s3ClientFactory, s3Configuration, new TestBlobId.Factory(), s3RequestOption);
     }
 
     @BeforeEach
     void beforeEach() throws Exception {
         // Why? https://github.com/apache/james-project/pull/1981#issuecomment-2380396460
-        createBucket(TEST_BUCKET_NAME.asString());
+        s3ClientFactory.get().createBucket(builder -> builder.bucket(TEST_BUCKET_NAME.asString()))
+            .get();
     }
 
-    private void createBucket(String bucketName) throws Exception {
-        s3ClientFactory.get().createBucket(builder -> builder.bucket(bucketName))
-            .get();
+    @Override
+    public BlobStoreDAO testee() {
+        return testee;
+    }
+
+    @Override
+    public S3AsyncClient s3Client() {
+        return s3ClientFactory.get();
     }
 
     private void deleteBucket(String bucketName) {
@@ -93,25 +99,6 @@ public class S3MinioTest implements BlobStoreDAOContract {
         } catch (InterruptedException | ExecutionException e) {
             throw new RuntimeException("Error while deleting bucket", e);
         }
-    }
-
-    @Override
-    public BlobStoreDAO testee() {
-        return testee;
-    }
-
-    @Test
-    void saveWillThrowWhenBlobIdHasSlashCharacters() {
-        BlobId invalidBlobId = new TestBlobId("test-blob//id");
-        assertThatThrownBy(() -> Mono.from(testee.save(TEST_BUCKET_NAME, invalidBlobId, SHORT_BYTEARRAY)).block())
-            .isInstanceOf(S3Exception.class)
-            .hasMessageContaining("Object name contains unsupported characters");
-    }
-
-    @Test
-    void saveShouldWorkWhenValidBlobId() {
-        Mono.from(testee.save(TEST_BUCKET_NAME, TEST_BLOB_ID, SHORT_BYTEARRAY)).block();
-        assertThat(Mono.from(testee.readBytes(TEST_BUCKET_NAME, TEST_BLOB_ID)).block()).isEqualTo(SHORT_BYTEARRAY);
     }
 
     @Test
