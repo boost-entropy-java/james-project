@@ -19,13 +19,17 @@
 
 package org.apache.james.protocols.webadmin;
 
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
 import jakarta.inject.Inject;
 
 import org.apache.james.DisconnectorNotifier;
+import org.apache.james.core.ConnectionDescription;
+import org.apache.james.core.ConnectionDescriptionSupplier;
 import org.apache.james.core.Username;
 import org.apache.james.protocols.lib.netty.CertificateReloadable;
 import org.apache.james.util.Port;
@@ -36,6 +40,9 @@ import org.eclipse.jetty.http.HttpStatus;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.github.fge.lambdas.Throwing;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
@@ -46,19 +53,53 @@ import spark.Request;
 import spark.Service;
 
 public class ProtocolServerRoutes implements Routes {
+    record ConnectionDescriptionDTO(
+        String protocol,
+        String endpoint,
+        Optional<String> remoteAddress,
+        Optional<Instant> connectionDate,
+        boolean isActive,
+        boolean isOpen,
+        boolean isWritable,
+        boolean isEncrypted,
+        Optional<String> username,
+        Map<String, String> protocolSpecificInformation) {
+
+        static ConnectionDescriptionDTO from(ConnectionDescription domainObject) {
+            return new ConnectionDescriptionDTO(domainObject.protocol(),
+                domainObject.endpoint(),
+                domainObject.remoteAddress(),
+                domainObject.connectionDate(),
+                domainObject.isActive(),
+                domainObject.isOpen(),
+                domainObject.isWritable(),
+                domainObject.isEncrypted(),
+                domainObject.username().map(Username::asString),
+                domainObject.protocolSpecificInformation());
+        }
+    }
+
     public static final String SERVERS = "servers";
     public static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     public static final TypeReference<List<String>> LIST_OF_STRING = new TypeReference<>() {
 
     };
 
+    static {
+        OBJECT_MAPPER.registerModule(new Jdk8Module());
+        OBJECT_MAPPER.registerModule(new JavaTimeModule());
+        OBJECT_MAPPER.configure(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS, false);
+    }
+
     private final Set<CertificateReloadable.Factory> servers;
     private final DisconnectorNotifier disconnector;
+    private final ConnectionDescriptionSupplier connectionDescriptionSupplier;
 
     @Inject
-    public ProtocolServerRoutes(Set<CertificateReloadable.Factory> servers, DisconnectorNotifier disconnector) {
+    public ProtocolServerRoutes(Set<CertificateReloadable.Factory> servers, DisconnectorNotifier disconnector, ConnectionDescriptionSupplier connectionDescriptionSupplier) {
         this.servers = servers;
         this.disconnector = disconnector;
+        this.connectionDescriptionSupplier = connectionDescriptionSupplier;
     }
 
     @Override
@@ -110,6 +151,24 @@ public class ProtocolServerRoutes implements Routes {
 
             return Responses.returnNoContent(response);
         });
+
+        service.get(SERVERS + "/channels", (request, response) -> OBJECT_MAPPER.writeValueAsString(connectionDescriptionSupplier.describeConnections()
+            .map(ConnectionDescriptionDTO::from)
+            .toList()));
+
+        service.get(SERVERS + "/channels/:user", (request, response) -> {
+            Username username = Username.of(request.params("user"));
+            return OBJECT_MAPPER.writeValueAsString(connectionDescriptionSupplier.describeConnections()
+                .filter(connectionDescription -> connectionDescription.username().map(username::equals).orElse(false))
+                .map(ConnectionDescriptionDTO::from)
+                .toList());
+        });
+
+        service.get(SERVERS + "/connectedUsers", (request, response) -> OBJECT_MAPPER.writeValueAsString(connectionDescriptionSupplier.describeConnections()
+            .flatMap(connectionDescription -> connectionDescription.username().stream())
+            .distinct()
+            .map(Username::asString)
+            .toList()));
     }
 
     private Predicate<CertificateReloadable> filters(Request request) {
