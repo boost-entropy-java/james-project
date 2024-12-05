@@ -17,7 +17,7 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.task.eventsourcing.distributed;
+package org.apache.james.modules.mailbox;
 
 import jakarta.inject.Inject;
 
@@ -28,16 +28,16 @@ import com.rabbitmq.client.Connection;
 
 import reactor.core.publisher.Mono;
 
-public class TerminationReconnectionHandler implements SimpleConnectionPool.ReconnectionHandler {
-    private final RabbitMQTerminationSubscriber terminationSubscriber;
+public class DeletedMessageVaultWorkQueueReconnectionHandler implements SimpleConnectionPool.ReconnectionHandler {
+    private final DistributedDeletedMessageVaultDeletionCallback distributedDeletedMessageVaultDeletionCallback;
 
     @Inject
-    public TerminationReconnectionHandler(RabbitMQTerminationSubscriber terminationSubscriber) {
-        this.terminationSubscriber = terminationSubscriber;
+    public DeletedMessageVaultWorkQueueReconnectionHandler(DistributedDeletedMessageVaultDeletionCallback distributedDeletedMessageVaultDeletionCallback) {
+        this.distributedDeletedMessageVaultDeletionCallback = distributedDeletedMessageVaultDeletionCallback;
     }
 
     @Override
     public Publisher<Void> handleReconnection(Connection connection) {
-        return Mono.fromRunnable(terminationSubscriber::restart);
+        return Mono.fromRunnable(distributedDeletedMessageVaultDeletionCallback::restart);
     }
 }

@@ -17,27 +17,11 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.task.eventsourcing.distributed;
+package org.apache.james.server.blob.deduplication;
 
-import jakarta.inject.Inject;
+import java.time.Instant;
 
-import org.apache.james.backends.rabbitmq.SimpleConnectionPool;
-import org.reactivestreams.Publisher;
-
-import com.rabbitmq.client.Connection;
-
-import reactor.core.publisher.Mono;
-
-public class TerminationReconnectionHandler implements SimpleConnectionPool.ReconnectionHandler {
-    private final RabbitMQTerminationSubscriber terminationSubscriber;
-
-    @Inject
-    public TerminationReconnectionHandler(RabbitMQTerminationSubscriber terminationSubscriber) {
-        this.terminationSubscriber = terminationSubscriber;
-    }
-
-    @Override
-    public Publisher<Void> handleReconnection(Connection connection) {
-        return Mono.fromRunnable(terminationSubscriber::restart);
-    }
+@FunctionalInterface
+public interface GenerationAware {
+    boolean inActiveGeneration(GenerationAwareBlobId.Configuration configuration, Instant now);
 }
