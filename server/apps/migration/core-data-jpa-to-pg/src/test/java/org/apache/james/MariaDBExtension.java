@@ -22,34 +22,34 @@ package org.apache.james;
 import java.util.UUID;
 
 import org.apache.james.backends.jpa.JPAConfiguration;
-import org.apache.pulsar.client.api.PulsarClientException;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.containers.MariaDBContainer;
 import org.testcontainers.containers.output.OutputFrame;
 
 import com.google.inject.Module;
 import com.google.inject.util.Modules;
 
-public class PostgresExtension implements GuiceModuleTestExtension {
+public class MariaDBExtension implements GuiceModuleTestExtension {
 
-    private static final Logger logger = LoggerFactory.getLogger(PostgresExtension.class);
+    private static final Logger logger = LoggerFactory.getLogger(MariaDBExtension.class);
 
     private static void displayDockerLog(OutputFrame outputFrame) {
         logger.info(outputFrame.getUtf8String().trim());
     }
 
-    private final PostgreSQLContainer container;
+    private final MariaDBContainer container;
     private JPAConfiguration jpaConfiguration;
 
-    public PostgresExtension() {
-        container = new PostgreSQLContainer<>("postgres:11")
-            .withLogConsumer(PostgresExtension::displayDockerLog);
+    public MariaDBExtension() {
+        container = new MariaDBContainer<>("mariadb:10.6")
+                .withLogConsumer(MariaDBExtension::displayDockerLog)
+                .withReuse(true);
     }
 
     @Override
-    public void beforeAll(ExtensionContext extensionContext) throws PulsarClientException {
+    public void beforeAll(ExtensionContext extensionContext) throws Exception {
         container.start();
     }
 
@@ -60,20 +60,21 @@ public class PostgresExtension implements GuiceModuleTestExtension {
 
     @Override
     public void beforeEach(ExtensionContext extensionContext) throws Exception {
-        var dbName = UUID.randomUUID().toString();
-        container.execInContainer("psql", "-U", container.getUsername(), "-c", "create database \"" + dbName + "\"");
+        var dbName = UUID.randomUUID().toString().replace('-', '_');
+        String script = String.format("create database %s; grant all on %s.* to %s", dbName, dbName, container.getUsername());
+        container.execInContainer("mariadb", "-u", "root", "--password=" + container.getPassword(), "--execute", script);
         container.withDatabaseName(dbName);
         jpaConfiguration = JPAConfiguration.builder()
-            .driverName(container.getDriverClassName())
-            .driverURL(container.getJdbcUrl())
-            .username(container.getUsername())
-            .password(container.getPassword())
-            .build();
+                .driverName(container.getDriverClassName())
+                .driverURL(container.getJdbcUrl())
+                .username(container.getUsername())
+                .password(container.getPassword())
+                .build();
     }
 
     @Override
     public Module getModule() {
         return Modules.combine(binder -> binder.bind(JPAConfiguration.class)
-            .toInstance(jpaConfiguration));
+                .toInstance(jpaConfiguration));
     }
 }

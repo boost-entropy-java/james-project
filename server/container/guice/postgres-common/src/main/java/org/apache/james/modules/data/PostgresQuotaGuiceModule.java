@@ -20,20 +20,32 @@
 package org.apache.james.modules.data;
 
 import org.apache.james.backends.postgres.PostgresModule;
-import org.apache.james.droplists.api.DropList;
-import org.apache.james.droplists.postgres.PostgresDropList;
-import org.apache.james.droplists.postgres.PostgresDropListModule;
+import org.apache.james.backends.postgres.quota.PostgresQuotaCurrentValueDAO;
+import org.apache.james.backends.postgres.quota.PostgresQuotaLimitDAO;
+import org.apache.james.domainlist.lib.DomainListConfiguration;
+import org.apache.james.domainlist.postgres.PostgresDomainList;
+import org.apache.james.utils.InitializationOperation;
+import org.apache.james.utils.InitilizationOperationBuilder;
 
 import com.google.inject.AbstractModule;
 import com.google.inject.Scopes;
 import com.google.inject.multibindings.Multibinder;
+import com.google.inject.multibindings.ProvidesIntoSet;
 
-public class PostgresDropListsModule extends AbstractModule {
+public class PostgresQuotaGuiceModule extends AbstractModule {
     @Override
-    protected void configure() {
-        bind(DropList.class).to(PostgresDropList.class).in(Scopes.SINGLETON);
+    public void configure() {
+        bind(PostgresQuotaCurrentValueDAO.class).in(Scopes.SINGLETON);
+        bind(PostgresQuotaLimitDAO.class).in(Scopes.SINGLETON);
 
         Multibinder<PostgresModule> postgresDataDefinitions = Multibinder.newSetBinder(binder(), PostgresModule.class);
-        postgresDataDefinitions.addBinding().toInstance(PostgresDropListModule.MODULE);
+        postgresDataDefinitions.addBinding().toInstance(org.apache.james.backends.postgres.quota.PostgresQuotaModule.MODULE);
+    }
+
+    @ProvidesIntoSet
+    InitializationOperation configureDomainList(DomainListConfiguration configuration, PostgresDomainList postgresDomainList) {
+        return InitilizationOperationBuilder
+            .forClass(PostgresDomainList.class)
+            .init(() -> postgresDomainList.configure(configuration));
     }
 }

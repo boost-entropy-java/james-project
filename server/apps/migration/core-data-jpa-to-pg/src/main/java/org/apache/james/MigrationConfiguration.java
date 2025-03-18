@@ -24,16 +24,27 @@ import java.util.Optional;
 
 import org.apache.james.filesystem.api.FileSystem;
 import org.apache.james.filesystem.api.JamesDirectoriesProvider;
+import org.apache.james.modules.blobstore.BlobStoreConfiguration;
 import org.apache.james.server.core.JamesServerResourceLoader;
 import org.apache.james.server.core.MissingArgumentException;
 import org.apache.james.server.core.configuration.Configuration;
+import org.apache.james.server.core.filesystem.FileSystemImpl;
+import org.apache.james.utils.PropertiesProvider;
 
+import com.github.fge.lambdas.Throwing;
 import com.google.common.base.MoreObjects;
 
-public class SMTPRelayConfiguration implements Configuration {
+public record MigrationConfiguration(
+        ConfigurationPath configurationPath,
+        JamesDirectoriesProvider directories,
+        BlobStoreConfiguration blobStoreConfiguration
+) implements Configuration {
+    private static final BlobStoreConfiguration.BlobStoreImplName DEFAULT_BLOB_STORE = BlobStoreConfiguration.BlobStoreImplName.POSTGRES;
+
     public static class Builder {
         private Optional<String> rootDirectory;
         private Optional<ConfigurationPath> configurationPath;
+        private Optional<BlobStoreConfiguration> blobStoreConfiguration;
 
         private Builder() {
             rootDirectory = Optional.empty();
@@ -52,7 +63,7 @@ public class SMTPRelayConfiguration implements Configuration {
 
         public Builder useWorkingDirectoryEnvProperty() {
             rootDirectory = Optional.ofNullable(System.getProperty(WORKING_DIRECTORY));
-            if (!rootDirectory.isPresent()) {
+            if (rootDirectory.isEmpty()) {
                 throw new MissingArgumentException("Server needs a working.directory env entry");
             }
             return this;
@@ -69,25 +80,28 @@ public class SMTPRelayConfiguration implements Configuration {
         }
 
 
-        public SMTPRelayConfiguration build() {
+        public MigrationConfiguration build() {
             ConfigurationPath configurationPath = this.configurationPath.orElse(new ConfigurationPath(FileSystem.FILE_PROTOCOL_AND_CONF));
             JamesServerResourceLoader directories = new JamesServerResourceLoader(rootDirectory
-                .orElseThrow(() -> new MissingArgumentException("Server needs a working.directory env entry")));
+                    .orElseThrow(() -> new MissingArgumentException("Server needs a working.directory env entry")));
+            FileSystemImpl fileSystem = new FileSystemImpl(directories);
+            PropertiesProvider propertiesProvider = new PropertiesProvider(fileSystem, configurationPath);
+            BlobStoreConfiguration blobStoreConfiguration = this.blobStoreConfiguration.orElseGet(
+                    Throwing.supplier(
+                            () -> BlobStoreConfiguration.parse(propertiesProvider, DEFAULT_BLOB_STORE)
+                    )
+            );
+            return new MigrationConfiguration(configurationPath, directories, blobStoreConfiguration);
+        }
 
-            return new SMTPRelayConfiguration(configurationPath, directories);
+        public Builder blobStore(BlobStoreConfiguration blobStoreConfiguration) {
+            this.blobStoreConfiguration = Optional.of(blobStoreConfiguration);
+            return this;
         }
     }
 
-    static SMTPRelayConfiguration.Builder builder() {
+    static MigrationConfiguration.Builder builder() {
         return new Builder();
-    }
-
-    private final ConfigurationPath configurationPath;
-    private final JamesDirectoriesProvider directories;
-
-    private SMTPRelayConfiguration(ConfigurationPath configurationPath, JamesDirectoriesProvider directories) {
-        this.configurationPath = configurationPath;
-        this.directories = directories;
     }
 
     @Override
