@@ -17,11 +17,23 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.mailbox.opensearch.query;
+package org.apache.james.modules.mailbox;
 
-import org.apache.james.mailbox.model.SearchQuery.Criterion;
-import org.opensearch.client.opensearch._types.query_dsl.Query;
+import org.apache.james.mailbox.opensearch.DefaultMailboxMappingFactory;
+import org.apache.james.mailbox.opensearch.MailboxMappingFactory;
+import org.apache.james.mailbox.opensearch.query.CriterionConverter;
+import org.apache.james.mailbox.opensearch.query.DefaultCriterionConverter;
 
-public interface CriterionConverter {
-    Query convertCriterion(Criterion criterion);
+import com.google.inject.AbstractModule;
+import com.google.inject.Scopes;
+
+public class OpenSearchMailboxMappingModule extends AbstractModule {
+    @Override
+    protected void configure() {
+        bind(DefaultMailboxMappingFactory.class).in(Scopes.SINGLETON);
+        bind(MailboxMappingFactory.class).to(DefaultMailboxMappingFactory.class);
+
+        bind(DefaultCriterionConverter.class).in(Scopes.SINGLETON);
+        bind(CriterionConverter.class).to(DefaultCriterionConverter.class);
+    }
 }
