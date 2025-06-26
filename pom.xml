@@ -665,7 +665,7 @@
         <maven-plugin-api.version>3.9.10</maven-plugin-api.version>
         <maven-reporting-impl.version>3.1.0</maven-reporting-impl.version>
         <maven-reporting-api.version>3.1.1</maven-reporting-api.version>
-        <maven-surefire-plugin.version>3.3.0</maven-surefire-plugin.version>
+        <maven-surefire-plugin.version>3.5.3</maven-surefire-plugin.version>
         <maven-enforcer-plugin.version>3.5.0</maven-enforcer-plugin.version>
         <qdox.version>2.2.0</qdox.version>
         <jaxb.version>4.0.5</jaxb.version>
@@ -685,7 +685,7 @@
         <doclint>none</doclint>
         <mockito.version>5.18.0</mockito.version>
         <ical4j.version>4.1.1</ical4j.version>
-        <jacoco-maven-plugin.version>0.8.12</jacoco-maven-plugin.version>
+        <jacoco-maven-plugin.version>0.8.13</jacoco-maven-plugin.version>
         <javacrumbs.json-unit.version>4.1.1</javacrumbs.json-unit.version>
         <fastutil-core.version>8.5.15</fastutil-core.version>
     </properties>
@@ -3078,7 +3078,7 @@
                 <plugin>
                     <groupId>com.github.ekryd.sortpom</groupId>
                     <artifactId>sortpom-maven-plugin</artifactId>
-                    <version>3.2.1</version>
+                    <version>4.0.0</version>
                     <configuration>
                         <createBackupFile>false</createBackupFile>
                         <expandEmptyElements>false</expandEmptyElements>
@@ -3120,7 +3120,7 @@
                 <plugin>
                     <groupId>com.google.cloud.tools</groupId>
                     <artifactId>jib-maven-plugin</artifactId>
-                    <version>3.3.2</version>
+                    <version>3.4.6</version>
                 </plugin>
                 <plugin>
                     <groupId>io.github.evis</groupId>
@@ -3155,7 +3155,7 @@
                 <plugin>
                     <groupId>com.googlecode.maven-download-plugin</groupId>
                     <artifactId>download-maven-plugin</artifactId>
-                    <version>1.6.8</version>
+                    <version>1.13.0</version>
                 </plugin>
                 <plugin>
                     <groupId>org.scalatest</groupId>
@@ -3178,7 +3178,7 @@
                 <plugin>
                     <groupId>net.alchim31.maven</groupId>
                     <artifactId>scala-maven-plugin</artifactId>
-                    <version>4.9.1</version>
+                    <version>4.9.5</version>
                     <configuration>
                         <recompileMode>all</recompileMode>
                         <source>${target.jdk}</source>
@@ -3226,7 +3226,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-antrun-plugin</artifactId>
-                    <version>1.8</version>
+                    <version>3.1.0</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
@@ -3247,12 +3247,12 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-checkstyle-plugin</artifactId>
-                    <version>3.3.0</version>
+                    <version>3.6.0</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-compiler-plugin</artifactId>
-                    <version>3.13.0</version>
+                    <version>3.14.0</version>
                     <configuration>
                         <parameters>true</parameters>
                         <source>${target.jdk}</source>
@@ -3263,12 +3263,12 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-dependency-plugin</artifactId>
-                    <version>3.3.0</version>
+                    <version>3.8.1</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-deploy-plugin</artifactId>
-                    <version>2.8.2</version>
+                    <version>3.1.4</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
@@ -3315,12 +3315,12 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-jar-plugin</artifactId>
-                    <version>3.4.1</version>
+                    <version>3.4.2</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-javadoc-plugin</artifactId>
-                    <version>3.6.3</version>
+                    <version>3.11.2</version>
                     <configuration>
                         <!-- The javadoc plugin only runs in the javadoc modules. But with the default configuration it tries
                               to run a new maven instance in every dependency, in order to generate the apidocs there as well.
@@ -3357,22 +3357,22 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-jxr-plugin</artifactId>
-                    <version>3.3.0</version>
+                    <version>3.6.0</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-plugin-plugin</artifactId>
-                    <version>3.11.0</version>
+                    <version>3.15.1</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-project-info-reports-plugin</artifactId>
-                    <version>3.3.0</version>
+                    <version>3.9.0</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-remote-resources-plugin</artifactId>
-                    <version>1.6.0</version>
+                    <version>3.3.0</version>
                     <executions>
                         <execution>
                             <!--
@@ -3387,7 +3387,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-release-plugin</artifactId>
-                    <version>2.5.3</version>
+                    <version>3.1.1</version>
                     <configuration>
                         <!-- avoid double buildscan during forked builds -->
                         <arguments>-Dgradle.scan.disabled=true</arguments>
@@ -3401,7 +3401,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-scm-plugin</artifactId>
-                    <version>1.9.5</version>
+                    <version>2.1.0</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
@@ -3411,12 +3411,12 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-shade-plugin</artifactId>
-                    <version>3.2.1</version>
+                    <version>3.6.0</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-site-plugin</artifactId>
-                    <version>3.12.0</version>
+                    <version>3.21.0</version>
                     <dependencies>
                         <dependency>
                             <groupId>org.apache.maven.wagon</groupId>
@@ -3462,7 +3462,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-report-plugin</artifactId>
-                    <version>3.1.2</version>
+                    <version>3.5.3</version>
                     <configuration>
                         <aggregate>true</aggregate>
                     </configuration>
@@ -3470,7 +3470,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-war-plugin</artifactId>
-                    <version>3.3.2</version>
+                    <version>3.4.0</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.rat</groupId>
@@ -3505,12 +3505,12 @@
                 <plugin>
                     <groupId>org.codehaus.mojo</groupId>
                     <artifactId>build-helper-maven-plugin</artifactId>
-                    <version>3.3.0</version>
+                    <version>3.6.1</version>
                 </plugin>
                 <plugin>
                     <groupId>org.codehaus.mojo</groupId>
                     <artifactId>exec-maven-plugin</artifactId>
-                    <version>1.6.0</version>
+                    <version>3.5.1</version>
                 </plugin>
                 <plugin>
                     <groupId>org.codehaus.mojo</groupId>
@@ -3527,12 +3527,12 @@
                 <plugin>
                     <groupId>org.codehaus.mojo</groupId>
                     <artifactId>javacc-maven-plugin</artifactId>
-                    <version>2.6</version>
+                    <version>3.1.1</version>
                 </plugin>
                 <plugin>
                     <groupId>org.codehaus.mojo</groupId>
                     <artifactId>versions-maven-plugin</artifactId>
-                    <version>2.16.0</version>
+                    <version>2.18.0</version>
                 </plugin>
                 <plugin>
                     <groupId>org.eclipse.m2e</groupId>
@@ -3610,7 +3610,7 @@
                 <plugin>
                     <groupId>io.github.git-commit-id</groupId>
                     <artifactId>git-commit-id-maven-plugin</artifactId>
-                    <version>8.0.0</version>
+                    <version>9.0.2</version>
                 </plugin>
             </plugins>
         </pluginManagement>
@@ -3993,6 +3993,16 @@
                 <pluginManagement>
                     <plugins>
                         <plugin>
+                            <groupId>io.github.git-commit-id</groupId>
+                            <artifactId>git-commit-id-maven-plugin</artifactId>
+                            <executions>
+                                <execution>
+                                    <id>get-the-git-infos</id>
+                                    <phase>none</phase>
+                                </execution>
+                            </executions>
+                        </plugin>
+                        <plugin>
                             <groupId>org.apache.maven.plugins</groupId>
                             <artifactId>maven-checkstyle-plugin</artifactId>
                             <executions>
@@ -4100,16 +4110,6 @@
                             <configuration>
                                 <rerunFailingTestsCount>2</rerunFailingTestsCount>
                             </configuration>
-                        </plugin>
-                        <plugin>
-                            <groupId>pl.project13.maven</groupId>
-                            <artifactId>git-commit-id-plugin</artifactId>
-                            <executions>
-                                <execution>
-                                    <id>get-the-git-infos</id>
-                                    <phase>none</phase>
-                                </execution>
-                            </executions>
                         </plugin>
                         <plugin>
                             <groupId>net.alchim31.maven</groupId>
