@@ -17,15 +17,46 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.util.docker;
+package org.apache.james.webadmin.authentication;
 
-public interface Images {
-    String FAKE_SMTP = "quanth99/rest-smtp-sink:1.0"; // Original Dockerfile: https://github.com/ambled/rest-smtp-sink/blob/master/Dockerfile
-    String RABBITMQ = "rabbitmq:4.1.1-management";
-    String ELASTICSEARCH_2 = "elasticsearch:2.4.6";
-    String ELASTICSEARCH_6 = "docker.elastic.co/elasticsearch/elasticsearch:6.3.2";
-    String OPENSEARCH = "opensearchproject/opensearch:2.19.2";
-    String TIKA = "apache/tika:3.2.0.0";
-    String MOCK_SMTP_SERVER = "linagora/mock-smtp-server:0.7";
-    String OPEN_LDAP = "osixia/openldap:1.5.0";
+import static spark.Spark.halt;
+
+import java.util.List;
+import java.util.Optional;
+
+import jakarta.inject.Inject;
+
+import org.eclipse.jetty.http.HttpStatus;
+
+import com.google.common.base.Splitter;
+
+import spark.Request;
+import spark.Response;
+
+public class PasswordFilter implements AuthenticationFilter {
+    public static final String PASSWORD = "Password";
+    public static final String OPTIONS = "OPTIONS";
+
+    private final List<String> passwords;
+
+    @Inject
+    public PasswordFilter(String passwordString) {
+        this.passwords = Splitter.on(',')
+            .splitToList(passwordString);
+    }
+
+    @Override
+    public void handle(Request request, Response response) throws Exception {
+        if (!request.requestMethod().equals(OPTIONS)) {
+            Optional<String> password = Optional.ofNullable(request.headers(PASSWORD));
+
+            if (!password.isPresent()) {
+                halt(HttpStatus.UNAUTHORIZED_401, "No Password header.");
+            }
+            if (!passwords.contains(password.get())) {
+                halt(HttpStatus.UNAUTHORIZED_401, "Wrong Password header.");
+            }
+        }
+    }
+
 }
