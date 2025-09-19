@@ -19,37 +19,35 @@
 
 package org.apache.james;
 
-import org.apache.james.jmap.JmapJamesServerContract;
+import org.apache.james.blob.aes.CryptoConfig;
 import org.apache.james.modules.AwsS3BlobStoreExtension;
 import org.apache.james.modules.RabbitMQExtension;
 import org.apache.james.modules.TestJMAPServerModule;
 import org.apache.james.modules.blobstore.BlobStoreConfiguration;
-import org.apache.james.modules.queue.rabbitmq.MailQueueViewChoice;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-class WithoutMailQueueViewImmutableTest implements JmapJamesServerContract, JamesServerConcreteContract {
-    static JamesServerBuilder<CassandraRabbitMQJamesConfiguration> baseExtension() {
-        return new JamesServerBuilder<CassandraRabbitMQJamesConfiguration>(tmpDir ->
-            CassandraRabbitMQJamesConfiguration.builder()
-                .workingDirectory(tmpDir)
-                .configurationFromClasspath()
-                .blobStore(BlobStoreConfiguration.builder()
-                    .s3()
-                    .disableCache()
-                    .deduplication()
-                    .noCryptoConfig())
-                .mailQueueViewChoice(MailQueueViewChoice.NONE)
-                .searchConfiguration(SearchConfiguration.scanning())
-                .build())
-            .server(configuration -> CassandraRabbitMQJamesServerMain.createServer(configuration)
-                .overrideWith(new TestJMAPServerModule()))
-            .extension(new CassandraExtension())
-            .extension(new RabbitMQExtension())
-            .extension(new AwsS3BlobStoreExtension());
-    }
-
+public class WithEncryptedBlobStoreTest implements MailsShouldBeWellReceivedConcreteContract {
     @RegisterExtension
-    static JamesServerExtension jamesServerExtension = baseExtension()
-        .lifeCycle(JamesServerExtension.Lifecycle.PER_CLASS)
+    static JamesServerExtension jamesServerExtension = new JamesServerBuilder<CassandraRabbitMQJamesConfiguration>(tmpDir ->
+        CassandraRabbitMQJamesConfiguration.builder()
+            .workingDirectory(tmpDir)
+            .configurationFromClasspath()
+            .blobStore(BlobStoreConfiguration.s3()
+                .enableCache()
+                .deduplication()
+                .cryptoConfig(CryptoConfig.builder()
+                    .password("myPass".toCharArray())
+                    // Hex.encode("salty".getBytes(StandardCharsets.UTF_8))
+                    .salt("73616c7479")
+                    .build()))
+            .searchConfiguration(SearchConfiguration.openSearch())
+            .build())
+        .server(configuration -> CassandraRabbitMQJamesServerMain.createServer(configuration)
+            .overrideWith(new TestJMAPServerModule()))
+        .extension(new DockerOpenSearchExtension())
+        .extension(new CassandraExtension())
+        .extension(new RabbitMQExtension())
+        .extension(new AwsS3BlobStoreExtension())
+        .lifeCycle(JamesServerExtension.Lifecycle.PER_TEST)
         .build();
 }

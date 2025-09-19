@@ -19,23 +19,42 @@
 
 package org.apache.james;
 
-import org.apache.james.jmap.JmapJamesServerContract;
+import static org.assertj.core.api.Assertions.assertThat;
+
+import org.apache.james.modules.AwsS3BlobStoreExtension;
+import org.apache.james.modules.RabbitMQExtension;
 import org.apache.james.modules.TestJMAPServerModule;
+import org.apache.james.modules.blobstore.BlobStoreConfiguration;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-public class CassandraLegacyQuotaJamesServerTest implements JamesServerConcreteContract, JmapJamesServerContract {
+class WithScanningSearchTest {
+    static JamesServerBuilder<CassandraRabbitMQJamesConfiguration> baseExtension() {
+        return new JamesServerBuilder<CassandraRabbitMQJamesConfiguration>(tmpDir ->
+            CassandraRabbitMQJamesConfiguration.builder()
+                .workingDirectory(tmpDir)
+                .configurationFromClasspath()
+                .blobStore(BlobStoreConfiguration.builder()
+                    .s3()
+                    .disableCache()
+                    .deduplication()
+                    .noCryptoConfig())
+                .searchConfiguration(SearchConfiguration.scanning())
+                .build())
+            .server(configuration -> CassandraRabbitMQJamesServerMain.createServer(configuration)
+                .overrideWith(new TestJMAPServerModule()))
+            .extension(new CassandraExtension())
+            .extension(new RabbitMQExtension())
+            .extension(new AwsS3BlobStoreExtension());
+    }
+
     @RegisterExtension
-    static JamesServerExtension testExtension = new JamesServerBuilder<CassandraJamesServerConfiguration>(tmpDir ->
-        CassandraJamesServerConfiguration.builder()
-            .workingDirectory(tmpDir)
-            .configurationFromClasspath()
-            .searchConfiguration(SearchConfiguration.openSearch())
-            .quotaCompatibilityModeEnabled(true)
-            .build())
-        .extension(new DockerOpenSearchExtension())
-        .extension(new CassandraExtension())
-        .server(configuration -> CassandraJamesServerMain.createServer(configuration)
-            .overrideWith(new TestJMAPServerModule()))
+    static JamesServerExtension jamesServerExtension = baseExtension()
         .lifeCycle(JamesServerExtension.Lifecycle.PER_CLASS)
         .build();
+
+    @Test
+    void shouldStartWithScanningSearch(GuiceJamesServer server) {
+        assertThat(server.isStarted()).isTrue();
+    }
 }

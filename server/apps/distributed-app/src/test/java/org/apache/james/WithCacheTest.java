@@ -19,35 +19,35 @@
 
 package org.apache.james;
 
-import org.apache.james.blob.aes.CryptoConfig;
 import org.apache.james.modules.AwsS3BlobStoreExtension;
 import org.apache.james.modules.RabbitMQExtension;
 import org.apache.james.modules.TestJMAPServerModule;
 import org.apache.james.modules.blobstore.BlobStoreConfiguration;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-public class WithEncryptedBlobStoreMutableTest implements MailsShouldBeWellReceivedConcreteContract {
+class WithCacheTest implements MailsShouldBeWellReceivedConcreteContract {
+    static JamesServerBuilder<CassandraRabbitMQJamesConfiguration> baseExtensionBuilder() {
+        return new JamesServerBuilder<CassandraRabbitMQJamesConfiguration>(tmpDir ->
+            CassandraRabbitMQJamesConfiguration.builder()
+                .workingDirectory(tmpDir)
+                .configurationFromClasspath()
+                .blobStore(BlobStoreConfiguration.builder()
+                    .s3()
+                    .enableCache()
+                    .deduplication()
+                    .noCryptoConfig())
+                .searchConfiguration(SearchConfiguration.openSearch())
+                .build())
+            .extension(new DockerOpenSearchExtension())
+            .extension(new CassandraExtension())
+            .extension(new RabbitMQExtension())
+            .extension(new AwsS3BlobStoreExtension())
+            .server(configuration -> CassandraRabbitMQJamesServerMain.createServer(configuration)
+                .overrideWith(new TestJMAPServerModule()));
+    }
+
     @RegisterExtension
-    static JamesServerExtension jamesServerExtension = new JamesServerBuilder<CassandraRabbitMQJamesConfiguration>(tmpDir ->
-        CassandraRabbitMQJamesConfiguration.builder()
-            .workingDirectory(tmpDir)
-            .configurationFromClasspath()
-            .blobStore(BlobStoreConfiguration.s3()
-                .enableCache()
-                .deduplication()
-                .cryptoConfig(CryptoConfig.builder()
-                    .password("myPass".toCharArray())
-                    // Hex.encode("salty".getBytes(StandardCharsets.UTF_8))
-                    .salt("73616c7479")
-                    .build()))
-            .searchConfiguration(SearchConfiguration.openSearch())
-            .build())
-        .server(configuration -> CassandraRabbitMQJamesServerMain.createServer(configuration)
-            .overrideWith(new TestJMAPServerModule()))
-        .extension(new DockerOpenSearchExtension())
-        .extension(new CassandraExtension())
-        .extension(new RabbitMQExtension())
-        .extension(new AwsS3BlobStoreExtension())
+    static JamesServerExtension jamesServerExtension = baseExtensionBuilder()
         .lifeCycle(JamesServerExtension.Lifecycle.PER_TEST)
         .build();
 }

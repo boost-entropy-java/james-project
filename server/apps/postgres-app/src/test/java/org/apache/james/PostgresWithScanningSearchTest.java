@@ -19,11 +19,33 @@
 
 package org.apache.james;
 
+import static org.apache.james.data.UsersRepositoryModuleChooser.Implementation.DEFAULT;
+import static org.assertj.core.api.Assertions.assertThat;
+
+import org.apache.james.PostgresJamesConfiguration.EventBusImpl;
+import org.apache.james.backends.postgres.PostgresExtension;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-class WithScanningSearchMutableTest implements MailsShouldBeWellReceivedConcreteContract {
+public class PostgresWithScanningSearchTest {
+    static PostgresExtension postgresExtension = PostgresExtension.empty();
+
     @RegisterExtension
-    JamesServerExtension jamesServerExtension = WithScanningSearchImmutableTest.baseExtension()
-        .lifeCycle(JamesServerExtension.Lifecycle.PER_TEST)
+    static JamesServerExtension jamesServerExtension = new JamesServerBuilder<PostgresJamesConfiguration>(tmpDir ->
+        PostgresJamesConfiguration.builder()
+            .workingDirectory(tmpDir)
+            .configurationFromClasspath()
+            .searchConfiguration(SearchConfiguration.scanning())
+            .usersRepository(DEFAULT)
+            .eventBusImpl(EventBusImpl.IN_MEMORY)
+            .build())
+        .server(PostgresJamesServerMain::createServer)
+        .extension(postgresExtension)
+        .lifeCycle(JamesServerExtension.Lifecycle.PER_CLASS)
         .build();
+
+    @Test
+    void shouldStart(GuiceJamesServer server) {
+        assertThat(server.isStarted()).isTrue();
+    }
 }

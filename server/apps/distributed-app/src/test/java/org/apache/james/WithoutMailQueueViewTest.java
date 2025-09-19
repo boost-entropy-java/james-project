@@ -19,37 +19,44 @@
 
 package org.apache.james;
 
-import org.apache.james.jmap.JmapJamesServerContract;
+import static org.assertj.core.api.Assertions.assertThat;
+
 import org.apache.james.modules.AwsS3BlobStoreExtension;
 import org.apache.james.modules.RabbitMQExtension;
 import org.apache.james.modules.TestJMAPServerModule;
 import org.apache.james.modules.blobstore.BlobStoreConfiguration;
+import org.apache.james.modules.queue.rabbitmq.MailQueueViewChoice;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-
-class WithCacheImmutableTest implements JmapJamesServerContract, JamesServerConcreteContract {
-    @RegisterExtension
-    static JamesServerExtension jamesServerExtension = baseExtensionBuilder()
-        .lifeCycle(JamesServerExtension.Lifecycle.PER_CLASS)
-        .build();
-
-    static JamesServerBuilder<CassandraRabbitMQJamesConfiguration> baseExtensionBuilder() {
+class WithoutMailQueueViewTest {
+    static JamesServerBuilder<CassandraRabbitMQJamesConfiguration> baseExtension() {
         return new JamesServerBuilder<CassandraRabbitMQJamesConfiguration>(tmpDir ->
             CassandraRabbitMQJamesConfiguration.builder()
                 .workingDirectory(tmpDir)
                 .configurationFromClasspath()
                 .blobStore(BlobStoreConfiguration.builder()
-                        .s3()
-                        .enableCache()
-                        .deduplication()
-                        .noCryptoConfig())
-                .searchConfiguration(SearchConfiguration.openSearch())
+                    .s3()
+                    .disableCache()
+                    .deduplication()
+                    .noCryptoConfig())
+                .mailQueueViewChoice(MailQueueViewChoice.NONE)
+                .searchConfiguration(SearchConfiguration.scanning())
                 .build())
-            .extension(new DockerOpenSearchExtension())
+            .server(configuration -> CassandraRabbitMQJamesServerMain.createServer(configuration)
+                .overrideWith(new TestJMAPServerModule()))
             .extension(new CassandraExtension())
             .extension(new RabbitMQExtension())
-            .extension(new AwsS3BlobStoreExtension())
-            .server(configuration -> CassandraRabbitMQJamesServerMain.createServer(configuration)
-                .overrideWith(new TestJMAPServerModule()));
+            .extension(new AwsS3BlobStoreExtension());
+    }
+
+    @RegisterExtension
+    static JamesServerExtension jamesServerExtension = baseExtension()
+        .lifeCycle(JamesServerExtension.Lifecycle.PER_CLASS)
+        .build();
+
+    @Test
+    void shouldStart(GuiceJamesServer server) {
+        assertThat(server.isStarted()).isTrue();
     }
 }
