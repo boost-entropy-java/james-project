@@ -17,33 +17,28 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james;
+package org.apache.james.cassandra;
 
-import org.apache.james.mailbox.tika.TikaContainer;
-import org.apache.james.modules.TestTikaModule;
-import org.junit.jupiter.api.extension.ExtensionContext;
+import org.apache.james.CassandraExtension;
+import org.apache.james.CassandraRabbitMQJamesServerMain;
+import org.apache.james.DockerOpenSearchExtension;
+import org.apache.james.JamesServerConcreteContract;
+import org.apache.james.JamesServerExtension;
+import org.apache.james.SearchConfiguration;
+import org.apache.james.TikaExtension;
+import org.apache.james.modules.RabbitMQExtension;
+import org.apache.james.modules.TestJMAPServerModule;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
-import com.google.inject.Module;
-
-public class TikaExtension implements GuiceModuleTestExtension {
-    private final TikaContainer tika;
-
-    public TikaExtension() {
-        this.tika = new TikaContainer();
-    }
-
-    @Override
-    public void beforeAll(ExtensionContext extensionContext) {
-        tika.start();
-    }
-
-    @Override
-    public void afterAll(ExtensionContext extensionContext) {
-        tika.stop();
-    }
-
-    @Override
-    public Module getModule() {
-        return new TestTikaModule(tika);
-    }
+class CassandraWithTikaTest implements JamesServerConcreteContract {
+    @RegisterExtension
+    static JamesServerExtension testExtension = TestingDistributedJamesServerBuilder.withSearchConfiguration(SearchConfiguration.openSearch())
+        .extension(new CassandraExtension())
+        .extension(new TikaExtension())
+        .extension(new DockerOpenSearchExtension())
+        .extension(new RabbitMQExtension())
+        .server(configuration -> CassandraRabbitMQJamesServerMain.createServer(configuration)
+            .overrideWith(new TestJMAPServerModule()))
+        .lifeCycle(JamesServerExtension.Lifecycle.PER_CLASS)
+        .build();
 }
