@@ -69,7 +69,6 @@ import org.assertj.core.api.SoftAssertions;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -1035,13 +1034,12 @@ public class RunRulesOnMailboxRoutesTest {
                 .body("submitDate", Matchers.is(notNullValue()))
                 .body("completedDate", Matchers.is(notNullValue()))
                 .body("additionalInformation.username", Matchers.is(USERNAME.asString()))
-                .body("additionalInformation.mailboxName", Matchers.is(MAILBOX_NAME))
+                .body("additionalInformation.mailboxPath", Matchers.is(MailboxPath.forUser(USERNAME, MAILBOX_NAME).asString()))
                 .body("additionalInformation.rulesOnMessagesApplySuccessfully", Matchers.is(2))
                 .body("additionalInformation.rulesOnMessagesApplyFailed", Matchers.is(0));
         }
     }
 
-    @Disabled("JAMES-4148: Route not plugged yet")
     @Nested
     class RunRulesOnAllUsersMailbox {
         @BeforeEach

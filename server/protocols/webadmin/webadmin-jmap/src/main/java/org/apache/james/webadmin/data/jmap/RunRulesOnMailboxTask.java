@@ -28,6 +28,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.james.core.Username;
 import org.apache.james.jmap.api.filtering.Rules;
+import org.apache.james.mailbox.model.MailboxPath;
 import org.apache.james.task.Task;
 import org.apache.james.task.TaskExecutionDetails;
 import org.apache.james.task.TaskType;
@@ -133,15 +134,15 @@ public class RunRulesOnMailboxTask implements Task {
     public static class AdditionalInformation implements TaskExecutionDetails.AdditionalInformation {
 
         private static AdditionalInformation from(Username username,
-                                                  MailboxName mailboxName,
+                                                  MailboxPath mailboxPath,
                                                   RunRulesOnMailboxTask.Context context) {
             Context.Snapshot snapshot = context.snapshot();
-            return new AdditionalInformation(username, mailboxName, Clock.systemUTC().instant(), snapshot.rulesOnMessagesApplySuccessfully,
+            return new AdditionalInformation(username, mailboxPath, Clock.systemUTC().instant(), snapshot.rulesOnMessagesApplySuccessfully,
                 snapshot.rulesOnMessagesApplyFailed, snapshot.maximumAppliedActionExceeded, snapshot.processedMessagesCount);
         }
 
         private final Username username;
-        private final MailboxName mailboxName;
+        private final MailboxPath mailboxPath;
         private final Instant timestamp;
         private final long rulesOnMessagesApplySuccessfully;
         private final long rulesOnMessagesApplyFailed;
@@ -149,14 +150,14 @@ public class RunRulesOnMailboxTask implements Task {
         private final long processedMessagesCount;
 
         public AdditionalInformation(Username username,
-                                     MailboxName mailboxName,
+                                     MailboxPath mailboxPath,
                                      Instant timestamp,
                                      long rulesOnMessagesApplySuccessfully,
                                      long rulesOnMessagesApplyFailed,
                                      boolean maximumAppliedActionExceeded,
                                      long processedMessagesCount) {
             this.username = username;
-            this.mailboxName = mailboxName;
+            this.mailboxPath = mailboxPath;
             this.timestamp = timestamp;
             this.rulesOnMessagesApplySuccessfully = rulesOnMessagesApplySuccessfully;
             this.rulesOnMessagesApplyFailed = rulesOnMessagesApplyFailed;
@@ -168,8 +169,8 @@ public class RunRulesOnMailboxTask implements Task {
             return username;
         }
 
-        public MailboxName getMailboxName() {
-            return mailboxName;
+        public MailboxPath getMailboxPath() {
+            return mailboxPath;
         }
 
         public Instant getTimestamp() {
@@ -202,24 +203,31 @@ public class RunRulesOnMailboxTask implements Task {
 
     private final Context context;
     private final Username username;
-    private final MailboxName mailboxName;
+    private final MailboxPath mailboxPath;
     private final Rules rules;
     private final RunRulesOnMailboxService runRulesOnMailboxService;
 
     public RunRulesOnMailboxTask(Username username,
-                                 MailboxName mailboxName,
+                                 MailboxPath mailboxPath,
                                  Rules rules,
                                  RunRulesOnMailboxService runRulesOnMailboxService) {
         this.username = username;
-        this.mailboxName = mailboxName;
+        this.mailboxPath = mailboxPath;
         this.rules = rules;
         this.runRulesOnMailboxService = runRulesOnMailboxService;
         this.context = new Context();
     }
 
+    public RunRulesOnMailboxTask(Username username,
+                                 MailboxName mailboxName,
+                                 Rules rules,
+                                 RunRulesOnMailboxService runRulesOnMailboxService) {
+        this(username, MailboxPath.forUser(username, mailboxName.asString()), rules, runRulesOnMailboxService);
+    }
+
     @Override
     public Result run() {
-        return runRulesOnMailboxService.runRulesOnMailbox(username, mailboxName, rules, context)
+        return runRulesOnMailboxService.runRulesOnMailbox(username, mailboxPath, rules, context)
             .block();
     }
 
@@ -230,15 +238,15 @@ public class RunRulesOnMailboxTask implements Task {
 
     @Override
     public Optional<TaskExecutionDetails.AdditionalInformation> details() {
-        return Optional.of(AdditionalInformation.from(username, mailboxName, context));
+        return Optional.of(AdditionalInformation.from(username, mailboxPath, context));
     }
 
     public Username getUsername() {
         return username;
     }
 
-    public MailboxName getMailboxName() {
-        return mailboxName;
+    public MailboxPath getMailboxPath() {
+        return mailboxPath;
     }
 
     public Rules getRules() {

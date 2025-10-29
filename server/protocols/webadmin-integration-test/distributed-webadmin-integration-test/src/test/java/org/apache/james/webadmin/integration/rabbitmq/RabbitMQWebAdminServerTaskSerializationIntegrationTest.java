@@ -90,7 +90,6 @@ import org.apache.james.webadmin.vault.routes.DeletedMessagesVaultRoutes;
 import org.eclipse.jetty.http.HttpStatus;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -777,10 +776,9 @@ class RabbitMQWebAdminServerTaskSerializationIntegrationTest {
             .body("additionalInformation.rulesOnMessagesApplySuccessfully", is(1))
             .body("additionalInformation.rulesOnMessagesApplyFailed", is(0))
             .body("additionalInformation.username", is(USERNAME))
-            .body("additionalInformation.mailboxName", is(MailboxConstants.INBOX));
+            .body("additionalInformation.mailboxPath", is(MailboxPath.forUser(Username.of(USERNAME), MailboxConstants.INBOX).asString()));
     }
 
-    @Disabled("JAMES-4148: Route not plugged yet")
     @Test
     void runRulesOnAllUsersMailboxShouldComplete(GuiceJamesServer server) throws Exception {
         server.getProbe(DataProbeImpl.class).addUser(USERNAME, "secret");
@@ -843,11 +841,10 @@ class RabbitMQWebAdminServerTaskSerializationIntegrationTest {
             .getList(".");
 
         assertThat(list)
-            .hasSize(3)
+            .hasSize(2)
             .first()
             .satisfies(map -> assertThat(map).hasSize(2)
-                .containsKeys("taskId")
-                .containsEntry("username", USERNAME));
+                .containsKeys("taskId", "username"));
     }
 
     @Test
