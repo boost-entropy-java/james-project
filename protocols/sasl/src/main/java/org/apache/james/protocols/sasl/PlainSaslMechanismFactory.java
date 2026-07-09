@@ -26,8 +26,25 @@ import org.apache.james.protocols.api.sasl.SaslMechanismFactory;
 import org.apache.james.protocols.sasl.plain.PlainSaslMechanism;
 
 public class PlainSaslMechanismFactory implements SaslMechanismFactory {
+    public static final boolean IGNORE_REQUIRE_SSL_CONFIGURATION = false;
     private static final boolean PLAIN_AUTH_DISALLOWED_DEFAULT = true;
     private static final boolean PLAIN_AUTH_ENABLED_DEFAULT = true;
+
+    private final boolean requireSslDefault;
+    private final boolean honorRequireSslConfiguration;
+
+    public PlainSaslMechanismFactory() {
+        this(PLAIN_AUTH_DISALLOWED_DEFAULT);
+    }
+
+    public PlainSaslMechanismFactory(boolean requireSslDefault) {
+        this(requireSslDefault, true);
+    }
+
+    public PlainSaslMechanismFactory(boolean requireSslDefault, boolean honorRequireSslConfiguration) {
+        this.requireSslDefault = requireSslDefault;
+        this.honorRequireSslConfiguration = honorRequireSslConfiguration;
+    }
 
     @Override
     public SaslMechanism create(HierarchicalConfiguration<ImmutableNode> serverConfiguration) {
@@ -39,7 +56,10 @@ public class PlainSaslMechanismFactory implements SaslMechanismFactory {
     }
 
     protected boolean requiresSsl(HierarchicalConfiguration<ImmutableNode> serverConfiguration) {
+        if (!honorRequireSslConfiguration) {
+            return requireSslDefault;
+        }
         return serverConfiguration.getBoolean("auth.requireSSL",
-            serverConfiguration.getBoolean("plainAuthDisallowed", PLAIN_AUTH_DISALLOWED_DEFAULT));
+            serverConfiguration.getBoolean("plainAuthDisallowed", requireSslDefault));
     }
 }

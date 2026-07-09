@@ -20,6 +20,7 @@
 package org.apache.james.protocols.api.sasl;
 
 public final class SaslMechanismNames {
+    public static final String LOGIN = "LOGIN";
     public static final String PLAIN = "PLAIN";
     public static final String OAUTHBEARER = "OAUTHBEARER";
     public static final String XOAUTH2 = "XOAUTH2";
