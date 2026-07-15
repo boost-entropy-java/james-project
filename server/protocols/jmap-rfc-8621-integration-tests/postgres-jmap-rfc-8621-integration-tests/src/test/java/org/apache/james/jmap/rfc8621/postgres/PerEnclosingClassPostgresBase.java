@@ -27,14 +27,15 @@ import org.apache.james.PostgresJamesConfiguration;
 import org.apache.james.PostgresJamesServerMain;
 import org.apache.james.SearchConfiguration;
 import org.apache.james.backends.postgres.PostgresExtension;
-import org.apache.james.jmap.rfc8621.contract.CustomNamespaceContract;
-import org.apache.james.jmap.rfc8621.contract.CustomNamespaceModule;
+import org.apache.james.jmap.rfc8621.contract.IdentityProbeModule;
+import org.apache.james.jmap.rfc8621.contract.JmapPreviewProbeModule;
+import org.apache.james.jmap.rfc8621.contract.probe.DelegationProbeModule;
 import org.apache.james.modules.RabbitMQExtension;
 import org.apache.james.modules.TestJMAPServerModule;
 import org.apache.james.modules.blobstore.BlobStoreConfiguration;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-public class PostgresCustomNamespaceTest implements CustomNamespaceContract {
+public class PerEnclosingClassPostgresBase {
     @RegisterExtension
     static JamesServerExtension testExtension = new JamesServerBuilder<PostgresJamesConfiguration>(tmpDir ->
         PostgresJamesConfiguration.builder()
@@ -53,7 +54,9 @@ public class PostgresCustomNamespaceTest implements CustomNamespaceContract {
         .extension(new RabbitMQExtension())
         .server(configuration -> PostgresJamesServerMain.createServer(configuration)
             .overrideWith(new TestJMAPServerModule())
-            .overrideWith(new CustomNamespaceModule()))
-        .lifeCycle(JamesServerExtension.Lifecycle.PER_CLASS)
+            .overrideWith(new DelegationProbeModule())
+            .overrideWith(new IdentityProbeModule())
+            .overrideWith(new JmapPreviewProbeModule()))
+        .lifeCycle(JamesServerExtension.Lifecycle.PER_ENCLOSING_CLASS)
         .build();
 }
