@@ -60,6 +60,7 @@ import org.apache.james.webadmin.authentication.AuthenticationFilter;
 import org.apache.james.webadmin.authentication.JwtFilter;
 import org.apache.james.webadmin.authentication.NoAuthenticationFilter;
 import org.apache.james.webadmin.authentication.PasswordFilter;
+import org.apache.james.webadmin.authentication.PasswordGenerator;
 import org.apache.james.webadmin.dto.DTOModuleInjections;
 import org.apache.james.webadmin.mdc.RequestLogger;
 import org.apache.james.webadmin.utils.JsonTransformer;
@@ -71,6 +72,7 @@ import com.github.fge.lambdas.Throwing;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.inject.AbstractModule;
+import com.google.inject.Module;
 import com.google.inject.Provider;
 import com.google.inject.Provides;
 import com.google.inject.Scopes;
@@ -79,10 +81,14 @@ import com.google.inject.multibindings.Multibinder;
 import com.google.inject.multibindings.ProvidesIntoSet;
 
 public class WebAdminServerModule extends AbstractModule {
+    public record PasswordGenerationDefault(boolean enabled) {
+    }
+
     private static final Logger LOGGER = LoggerFactory.getLogger(WebAdminServerModule.class);
 
     private static final boolean DEFAULT_JWT_DISABLED = false;
     private static final boolean DEFAULT_DISABLED = false;
+    private static final boolean DEFAULT_PASSWORD_GENERATION_ENABLED = true;
     private static final String DEFAULT_NO_CORS_ORIGIN = null;
     private static final boolean DEFAULT_CORS_DISABLED = false;
     private static final String DEFAULT_NO_KEYSTORE = null;
@@ -91,11 +97,17 @@ public class WebAdminServerModule extends AbstractModule {
     private static final String DEFAULT_NO_TRUST_KEYSTORE = null;
     private static final String DEFAULT_NO_TRUST_PASSWORD = null;
 
+    public static Module defaultPasswordGenerationModule(boolean enabled) {
+        return binder -> binder.bind(PasswordGenerationDefault.class)
+            .toInstance(new PasswordGenerationDefault(enabled));
+    }
+
     @Override
     protected void configure() {
         install(new TaskRoutesModule());
         install(new HealthCheckRoutesModule());
         install(new ServerRouteModule());
+        install(defaultPasswordGenerationModule(DEFAULT_PASSWORD_GENERATION_ENABLED));
 
         bind(JsonTransformer.class).in(Scopes.SINGLETON);
         bind(WebAdminServer.class).in(Scopes.SINGLETON);
@@ -137,14 +149,17 @@ public class WebAdminServerModule extends AbstractModule {
 
     @Provides
     @Singleton
-    public WebAdminConfiguration provideWebAdminConfiguration(FileSystem fileSystem, PropertiesProvider propertiesProvider) throws Exception {
+    public WebAdminConfiguration provideWebAdminConfiguration(FileSystem fileSystem,
+                                                              PropertiesProvider propertiesProvider,
+                                                              PasswordGenerationDefault passwordGenerationDefault) throws Exception {
         try {
             Configuration configurationFile = propertiesProvider.getConfiguration("webadmin");
 
             List<String> additionalRoutes = additionalRoutes(configurationFile);
+            boolean webAdminEnabled = configurationFile.getBoolean("enabled", DEFAULT_DISABLED);
 
             return WebAdminConfiguration.builder()
-                .enable(configurationFile.getBoolean("enabled", DEFAULT_DISABLED))
+                .enable(webAdminEnabled)
                 .port(port(configurationFile))
                 .tls(readHttpsConfiguration(configurationFile))
                 .enableCORS(configurationFile.getBoolean("cors.enable", DEFAULT_CORS_DISABLED))
@@ -155,7 +170,7 @@ public class WebAdminServerModule extends AbstractModule {
                     Optional.ofNullable(configurationFile.getString("jwt.publickeypem.url", null))))
                 .maxThreadCount(Optional.ofNullable(configurationFile.getInteger("maxThreadCount", null)))
                 .minThreadCount(Optional.ofNullable(configurationFile.getInteger("minThreadCount", null)))
-                .password(Optional.ofNullable(configurationFile.getString("password", null)))
+                .password(password(configurationFile, webAdminEnabled, passwordGenerationDefault))
                 .readOnlyPassword(Optional.ofNullable(configurationFile.getString("password.readonly", null)))
                 .noDeletePassword(Optional.ofNullable(configurationFile.getString("password.nodelete", null)))
                 .build();
@@ -172,6 +187,37 @@ public class WebAdminServerModule extends AbstractModule {
             return new RandomPortSupplier();
         }
         return new FixedPortSupplier(portNumber);
+    }
+
+    @VisibleForTesting
+    Optional<String> password(Configuration configurationFile,
+                              boolean webAdminEnabled,
+                              PasswordGenerationDefault passwordGenerationDefault) {
+        Optional<String> configuredPassword = Optional.ofNullable(configurationFile.getString("password", null));
+
+        if (configuredPassword.isPresent()) {
+            return configuredPassword;
+        }
+        if (shouldGeneratePassword(configurationFile, webAdminEnabled, passwordGenerationDefault)) {
+            return Optional.of(generateAndLogPassword());
+        }
+        return Optional.empty();
+    }
+
+    private boolean shouldGeneratePassword(Configuration configurationFile,
+                                           boolean webAdminEnabled,
+                                           PasswordGenerationDefault passwordGenerationDefault) {
+        return configurationFile.getBoolean("password.generate", passwordGenerationDefault.enabled())
+            && webAdminEnabled
+            && !configurationFile.getBoolean("jwt.enabled", DEFAULT_JWT_DISABLED);
+    }
+
+    private String generateAndLogPassword() {
+        String password = PasswordGenerator.generate();
+        LOGGER.warn("No WebAdmin password had been configured: a random one had been generated for this run. " +
+            "Supply it within the `Password` header of your WebAdmin requests, or pin it with the `password` entry " +
+            "of webadmin.properties. Generated WebAdmin password: {}", password);
+        return password;
     }
 
     @VisibleForTesting
