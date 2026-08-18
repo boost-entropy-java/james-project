@@ -16,19 +16,28 @@
  * specific language governing permissions and limitations      *
  * under the License.                                           *
  ****************************************************************/
-package org.apache.james.managesieveserver.netty;
 
-import org.apache.james.managesieve.api.Session;
-import org.apache.james.protocols.api.ProxyInformation;
+package org.apache.james.modules.protocols;
 
-import io.netty.util.AttributeKey;
+import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Just some constants which are used with the Netty implementation
- */
-public interface NettyConstants {
-    // AllButStartTlsLineBasedChannelHandler reads this shared key to disable command-injection detection after STARTTLS.
-    AttributeKey<ChannelManageSieveResponseWriter> RESPONSE_WRITER_ATTRIBUTE_KEY = AttributeKey.valueOf("session");
-    AttributeKey<ProxyInformation> PROXY_INFO = AttributeKey.valueOf("ProxyInfo");
-    AttributeKey<Session> SESSION_ATTRIBUTE_KEY = AttributeKey.valueOf("Session");
+import org.apache.james.protocols.sasl.OauthBearerSaslMechanismFactory;
+import org.apache.james.protocols.sasl.PlainSaslMechanismFactory;
+import org.apache.james.protocols.sasl.XOauth2SaslMechanismFactory;
+import org.junit.jupiter.api.Test;
+
+class ManageSieveServerModuleTest {
+    private final ManageSieveServerModule testee = new ManageSieveServerModule();
+
+    @Test
+    void provideDefaultManageSieveSaslMechanismFactoriesShouldPreserveManageSieveDefaults() {
+        assertThat(testee.provideDefaultManageSieveSaslMechanismFactories(
+                new OauthBearerSaslMechanismFactory(),
+                new XOauth2SaslMechanismFactory()))
+            .map(factory -> factory.getClass().getSimpleName())
+            .containsExactly(
+                PlainSaslMechanismFactory.class.getSimpleName(),
+                OauthBearerSaslMechanismFactory.class.getSimpleName(),
+                XOauth2SaslMechanismFactory.class.getSimpleName());
+    }
 }

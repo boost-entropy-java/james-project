@@ -21,16 +21,21 @@ package org.apache.james.managesieveserver;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Optional;
+
+import javax.net.ssl.SSLSocket;
 
 import org.apache.commons.lang3.EnumUtils;
 import org.apache.commons.net.SocketClient;
 import org.apache.commons.net.io.CRLFLineReader;
+import org.apache.james.protocols.api.utils.BogusSslContextFactory;
 
 public class ManageSieveClient extends SocketClient {
     private static final String ENCODING = StandardCharsets.UTF_8.name();
@@ -55,6 +60,20 @@ public class ManageSieveClient extends SocketClient {
     @Override
     protected void _connectAction_() throws IOException {
         super._connectAction_();
+        resetStreams();
+    }
+
+    public void execTLS() throws IOException {
+        SSLSocket sslSocket = (SSLSocket) BogusSslContextFactory.getClientContext().getSocketFactory()
+            .createSocket(_socket_, _socket_.getInetAddress().getHostAddress(), _socket_.getPort(), true);
+        sslSocket.startHandshake();
+        _socket_ = sslSocket;
+        _input_ = sslSocket.getInputStream();
+        _output_ = sslSocket.getOutputStream();
+        resetStreams();
+    }
+
+    private void resetStreams() throws IOException {
         this.reader = new CRLFLineReader(new InputStreamReader(_input_, ENCODING));
         this.writer = new BufferedWriter(new OutputStreamWriter(_output_, ENCODING));
     }
@@ -71,6 +90,9 @@ public class ManageSieveClient extends SocketClient {
         ArrayList<String> lines = new ArrayList<>();
         while (response == null) {
             String line = this.reader.readLine();
+            if (line == null) {
+                throw new EOFException("ManageSieve connection closed without a response");
+            }
             String[] tokens = line.split(" ", 3);
             if (EnumUtils.isValidEnumIgnoreCase(ResponseType.class, tokens[0])) {
                 ResponseType responseType = EnumUtils.getEnumIgnoreCase(ResponseType.class, tokens[0]);
@@ -93,12 +115,31 @@ public class ManageSieveClient extends SocketClient {
                 response = new ServerResponse(responseType, responseCode, explanation, lines);
             } else if (tokens[0].equals("+")) {
                 Optional<String> explanation = Optional.of(tokens[1].substring(1, tokens[1].length() - 1));
-                response = new ServerResponse(ResponseType.CONTINUATION, Optional.empty(), explanation, new ArrayList<String>());
+                response = new ServerResponse(ResponseType.CONTINUATION, Optional.empty(), explanation, new ArrayList<>());
             } else {
                 lines.addLast(line);
             }
         }
         return response;
+    }
+
+    public ServerResponse readSaslChallenge() throws IOException {
+        String line = this.reader.readLine();
+        if (line.startsWith("\"") && line.endsWith("\"")) {
+            return new ServerResponse(ResponseType.CONTINUATION, Optional.empty(),
+                Optional.of(line.substring(1, line.length() - 1)), new ArrayList<>());
+        }
+        throw new IOException("Expected a ManageSieve SASL challenge but received: " + line);
+    }
+
+    public byte[] readSaslSuccessData() throws IOException {
+        String line = this.reader.readLine();
+        String prefix = "OK (SASL \"";
+        String suffix = "\")";
+        if (line.startsWith(prefix) && line.endsWith(suffix)) {
+            return Base64.getDecoder().decode(line.substring(prefix.length(), line.length() - suffix.length()));
+        }
+        throw new IOException("Expected a ManageSieve SASL success response but received: " + line);
     }
 
     public void sendCommand(String command) throws IOException {

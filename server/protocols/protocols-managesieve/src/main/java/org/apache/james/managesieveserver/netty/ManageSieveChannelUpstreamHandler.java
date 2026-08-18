@@ -21,9 +21,7 @@ package org.apache.james.managesieveserver.netty;
 
 import java.io.Closeable;
 import java.net.InetSocketAddress;
-import java.util.Optional;
 
-import org.apache.james.jwt.OidcSASLConfiguration;
 import org.apache.james.managesieve.api.Session;
 import org.apache.james.managesieve.api.SessionTerminatedException;
 import org.apache.james.managesieve.transcode.ManageSieveProcessor;
@@ -53,14 +51,11 @@ public class ManageSieveChannelUpstreamHandler extends ChannelInboundHandlerAdap
     private final ManageSieveProcessor manageSieveProcessor;
     private final Encryption secure;
     private final int maxLineLength;
-    private final Optional<OidcSASLConfiguration> oidcConfiguration;
 
-    public ManageSieveChannelUpstreamHandler(
-        ManageSieveProcessor manageSieveProcessor, Encryption secure, int maxLineLength, Optional<OidcSASLConfiguration> oidcConfiguration) {
+    public ManageSieveChannelUpstreamHandler(ManageSieveProcessor manageSieveProcessor, Encryption secure, int maxLineLength) {
         this.manageSieveProcessor = manageSieveProcessor;
         this.secure = secure;
         this.maxLineLength = maxLineLength;
-        this.oidcConfiguration = oidcConfiguration;
     }
 
     private boolean isSSL() {
@@ -80,7 +75,8 @@ public class ManageSieveChannelUpstreamHandler extends ChannelInboundHandlerAdap
                 return;
             }
             if (request.length() > maxLineLength) {
-                throw new TooLongFrameException();
+                handleTooLongFrame(ctx);
+                return;
             }
 
             Session manageSieveSession = ctx.channel().attr(NettyConstants.SESSION_ATTRIBUTE_KEY).get();
@@ -125,25 +121,30 @@ public class ManageSieveChannelUpstreamHandler extends ChannelInboundHandlerAdap
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
         try (Closeable closeable = ManageSieveMDCContext.from(ctx)) {
             if (cause instanceof TooLongFrameException) {
-                // Max line length exceeded
-                // See also JAMES-1190
-                ctx.channel().attr(NettyConstants.RESPONSE_WRITER_ATTRIBUTE_KEY).get().write("NO Maximum command line length exceeded");
+                handleTooLongFrame(ctx);
             } else if (cause instanceof SessionTerminatedException) {
                 ctx.channel().attr(NettyConstants.RESPONSE_WRITER_ATTRIBUTE_KEY).get().write("OK channel is closing");
                 logout(ctx);
             } else {
                 LOGGER.warn("Error while processing ManageSieve request", cause);
+                logout(ctx);
             }
         }
     }
 
     private void logout(ChannelHandlerContext ctx) {
         // logout on error not sure if that is the best way to handle it
-        ctx.channel().attr(NettyConstants.SESSION_ATTRIBUTE_KEY).getAndSet(null);
-        // Make sure we close the channel after all the buffers were flushed out
-        Channel channel = ctx.channel();
-        if (channel.isActive()) {
-            channel.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
+        Session session = ctx.channel().attr(NettyConstants.SESSION_ATTRIBUTE_KEY).getAndSet(null);
+        try {
+            if (session != null) {
+                manageSieveProcessor.close(session);
+            }
+        } finally {
+            // Make sure we close the channel after all the buffers were flushed out
+            Channel channel = ctx.channel();
+            if (channel.isActive()) {
+                channel.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
+            }
         }
     }
 
@@ -154,7 +155,7 @@ public class ManageSieveChannelUpstreamHandler extends ChannelInboundHandlerAdap
             LOGGER.info("Connection established from {}", address.getAddress().getHostAddress());
 
             Session session = new SettableSession();
-            session.setOidcSASLConfiguration(this.oidcConfiguration);
+            session.setStartTlsSupported(supportsStartTLS());
             if (isSSL()) {
                 session.setSslEnabled(true);
             }
@@ -170,8 +171,14 @@ public class ManageSieveChannelUpstreamHandler extends ChannelInboundHandlerAdap
         try (Closeable closeable = ManageSieveMDCContext.from(ctx)) {
             InetSocketAddress address = (InetSocketAddress) ctx.channel().remoteAddress();
             LOGGER.info("Connection closed for {}", address.getAddress().getHostAddress());
-            ctx.channel().attr(NettyConstants.SESSION_ATTRIBUTE_KEY).getAndSet(null);
-            super.channelInactive(ctx);
+            Session session = ctx.channel().attr(NettyConstants.SESSION_ATTRIBUTE_KEY).getAndSet(null);
+            try {
+                if (session != null) {
+                    manageSieveProcessor.close(session);
+                }
+            } finally {
+                super.channelInactive(ctx);
+            }
         }
     }
 
@@ -181,5 +188,21 @@ public class ManageSieveChannelUpstreamHandler extends ChannelInboundHandlerAdap
             channel.pipeline().addFirst(SSL_HANDLER, secure.sslHandler());
             channel.config().setAutoRead(true);
         }
+    }
+
+    private boolean supportsStartTLS() {
+        return secure != null && secure.supportsEncryption() && secure.isStartTLS();
+    }
+
+    private void handleTooLongFrame(ChannelHandlerContext ctx) {
+        ChannelManageSieveResponseWriter responseWriter = ctx.channel().attr(NettyConstants.RESPONSE_WRITER_ATTRIBUTE_KEY).get();
+        responseWriter.resetCumulation();
+        Session session = ctx.channel().attr(NettyConstants.SESSION_ATTRIBUTE_KEY).get();
+        if (session != null && session.getState() == Session.State.AUTHENTICATION_IN_PROGRESS) {
+            // A discarded SASL response cannot be resumed; release the exchange before accepting another command.
+            manageSieveProcessor.close(session);
+        }
+        // Max line length exceeded. See also JAMES-1190.
+        responseWriter.write("NO Maximum command line length exceeded\r\n");
     }
 }

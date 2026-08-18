@@ -16,19 +16,21 @@
  * specific language governing permissions and limitations      *
  * under the License.                                           *
  ****************************************************************/
-package org.apache.james.managesieveserver.netty;
 
-import org.apache.james.managesieve.api.Session;
-import org.apache.james.protocols.api.ProxyInformation;
+package org.apache.james.modules.protocols;
 
-import io.netty.util.AttributeKey;
+import static java.lang.annotation.ElementType.FIELD;
+import static java.lang.annotation.ElementType.METHOD;
+import static java.lang.annotation.ElementType.PARAMETER;
+import static java.lang.annotation.RetentionPolicy.RUNTIME;
 
-/**
- * Just some constants which are used with the Netty implementation
- */
-public interface NettyConstants {
-    // AllButStartTlsLineBasedChannelHandler reads this shared key to disable command-injection detection after STARTTLS.
-    AttributeKey<ChannelManageSieveResponseWriter> RESPONSE_WRITER_ATTRIBUTE_KEY = AttributeKey.valueOf("session");
-    AttributeKey<ProxyInformation> PROXY_INFO = AttributeKey.valueOf("ProxyInfo");
-    AttributeKey<Session> SESSION_ATTRIBUTE_KEY = AttributeKey.valueOf("Session");
+import java.lang.annotation.Retention;
+import java.lang.annotation.Target;
+
+import com.google.inject.BindingAnnotation;
+
+@BindingAnnotation
+@Target({ FIELD, PARAMETER, METHOD })
+@Retention(RUNTIME)
+public @interface ManageSieveDefaultSaslMechanismFactories {
 }
