@@ -15,8 +15,10 @@ to do so might result in *information disclosure*.
  - *Phishing*: Crafted emails that tricks the user into doing unintended actions.
  - *Viruses*: An attacker sends an attachment that contains an exploit that could run if a user opens it.
  - *Denial of service*: A small request may result in a very large response and require considerable work on the server...
+ifndef::no-jmap[]
  - *Denial of service*: A malicious JMAP client may use the JMAP push subscription to attempt to flood a third party
 server with requests, creating a denial-of-service attack and masking the attacker’s true identity.
+endif::[]
  - *Dictionary Harvest Attacks*: An attacker can rely on SMTP command reply code to know if a user exists or not. This
  can be used to obtain the list of local users and later use those address as targets for other attacks.
 
@@ -51,10 +53,27 @@ forced to store users in James be sure to choose `PBKDF2` as a hashing algorithm
 are supported via the `verifyFailureDelay` property. Note that IMAP / SMTP connections are closed after 3 authentication
 failures.
 
+ifndef::no-webadmin[]
  - 5. Ensure that xref:{xref-base}/configure/webadmin.adoc[WebAdmin] is not exposed unencrypted to the outer world. Doing so trivially
 exposes yourself. You can either disable it, activate JWT security, or restrict it to listen only on localhost.
+endif::[]
+ifdef::no-webadmin[]
+ - 5. The only administrative interface of the {server-name} is JMX. Ensure it is not exposed to the outer world: keep
+it bound to `localhost` and set up authentication, as documented in xref:{xref-base}/configure/jmx.adoc[jmx.properties].
+endif::[]
 
+ifndef::no-jmap[]
  - 6. Set up `HTTPS` for http based protocols, namely *JMAP* and *WebAdmin*. We recommend the use of a reverse proxy like Nginx.
+endif::[]
+ifdef::no-jmap[]
+ifndef::no-webadmin[]
+ - 6. Set up `HTTPS` for *WebAdmin*. We recommend the use of a reverse proxy like Nginx.
+endif::[]
+ifdef::no-webadmin[]
+ - 6. Terminate `SSL`/`TLS` for every protocol you expose - SMTP, IMAP, POP3 and ManageSieve - either directly within
+James or behind a reverse proxy. See xref:{xref-base}/configure/ssl.adoc[SSL & TLS].
+endif::[]
+endif::[]
 
  - 7. Set up link:https://james.apache.org/howTo/spf.html[SPF] and link:https://james.apache.org/howTo/dkim.html[DKIM]
 for your outgoing emails to be trusted.
@@ -64,9 +83,11 @@ for your outgoing emails to be trusted.
 or xref:{xref-base}/configure/jmx.adoc[disabling JMX]. JMX is needed to use the existing CLI application but webadmin do offer similar
 features. Set the `jmx.remote.x.mlet.allow.getMBeansFromURL` to `false` to disable JMX remote code execution feature.
 
+ifndef::no-jmap[]
  - 9. If JMAP is enabled, be sure that JMAP PUSH cannot be used for server side request forgery. This can be
 xref:{xref-base}/configure/jmap.adoc[configured] using the `webpush.prevent.server.side.request.forgery=true` property,
 forbidding push to private addresses.
+endif::[]
 
 === Best practice: Should
 
@@ -76,12 +97,23 @@ using `auth.plainAuthEnabled=false`.
 
  - 2. Verify link:https://james.apache.org/howTo/spf.html[SPF] and xref:{xref-base}/configure/mailets.adoc#_dkimverify[DKIM] for your incoming emails.
 
+ifndef::no-webadmin[]
  - 3. Set up reasonable xref:{xref-base}/operate/webadmin.adoc#_administrating_quotas[storage quota] for your users.
+endif::[]
+ifdef::no-webadmin[]
+ - 3. Set up reasonable xref:{xref-base}/operate/cli.adoc#_manage_quotas[storage quota] for your users.
+endif::[]
 
+ifndef::no-spam[]
  - 4. We recommend setting up anti-spam and anti-virus solutions. James comes with some xref:{xref-base}/configure/spam.adoc[Rspamd and SpamAssassin]
 integration, and some xref:{xref-base}/configure/mailets.adoc#_clamavscan[ClamAV] tooling exists.
 Rspamd supports anti-phishing modules.
 Filtering with third party systems upstream is also possible.
+endif::[]
+ifdef::no-spam[]
+ - 4. We recommend setting up anti-spam and anti-virus solutions. Filtering with third party systems upstream of the
+{server-name} is the simplest option.
+endif::[]
 
  - 5. In order to limit your attack surface, disable protocols you or your users do not use. This includes the JMAP protocol,
 POP3, ManagedSieve, etc... Be conservative on what you expose.
