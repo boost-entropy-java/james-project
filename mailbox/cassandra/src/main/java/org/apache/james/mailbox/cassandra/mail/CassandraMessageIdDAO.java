@@ -42,7 +42,6 @@ import static org.apache.james.mailbox.cassandra.table.Flag.DRAFT;
 import static org.apache.james.mailbox.cassandra.table.Flag.FLAGGED;
 import static org.apache.james.mailbox.cassandra.table.Flag.RECENT;
 import static org.apache.james.mailbox.cassandra.table.Flag.SEEN;
-import static org.apache.james.mailbox.cassandra.table.Flag.USER;
 import static org.apache.james.mailbox.cassandra.table.Flag.USER_FLAGS;
 import static org.apache.james.mailbox.cassandra.table.MessageIdToImapUid.MOD_SEQ;
 import static org.apache.james.util.ReactorUtils.publishIfPresent;
@@ -117,6 +116,7 @@ public class CassandraMessageIdDAO {
     private final BlobId.Factory blobIdFactory;
     private final PreparedStatement delete;
     private final PreparedStatement insert;
+    private final PreparedStatement updateDenormalizedFields;
     private final PreparedStatement select;
     private final PreparedStatement selectAll;
     private final PreparedStatement selectAllUids;
@@ -144,6 +144,7 @@ public class CassandraMessageIdDAO {
         this.delete = prepareDelete(session);
         this.insert = prepareInsert(session);
         this.update = prepareUpdate(session);
+        this.updateDenormalizedFields = prepareUpdateDenormalizedFields(session);
         this.select = prepareSelect(session);
         this.selectAll = prepareSelectAll(session);
         this.selectAllUids = prepareSelectAllUids(session);
@@ -179,13 +180,23 @@ public class CassandraMessageIdDAO {
                 setColumn(FLAGGED, bindMarker(FLAGGED)),
                 setColumn(RECENT, bindMarker(RECENT)),
                 setColumn(SEEN, bindMarker(SEEN)),
-                setColumn(USER, bindMarker(USER)),
                 setColumn(INTERNAL_DATE, bindMarker(INTERNAL_DATE)),
                 setColumn(SAVE_DATE, bindMarker(SAVE_DATE)),
                 setColumn(BODY_START_OCTET, bindMarker(BODY_START_OCTET)),
                 setColumn(FULL_CONTENT_OCTETS, bindMarker(FULL_CONTENT_OCTETS)),
                 setColumn(HEADER_CONTENT, bindMarker(HEADER_CONTENT)),
                 append(USER_FLAGS, bindMarker(USER_FLAGS)))
+            .where(column(MAILBOX_ID).isEqualTo(bindMarker(MAILBOX_ID)),
+                column(IMAP_UID).isEqualTo(bindMarker(IMAP_UID)))
+            .build());
+    }
+
+    private PreparedStatement prepareUpdateDenormalizedFields(CqlSession session) {
+        return session.prepare(update(TABLE_NAME)
+            .set(setColumn(INTERNAL_DATE, bindMarker(INTERNAL_DATE)),
+                setColumn(BODY_START_OCTET, bindMarker(BODY_START_OCTET)),
+                setColumn(FULL_CONTENT_OCTETS, bindMarker(FULL_CONTENT_OCTETS)),
+                setColumn(HEADER_CONTENT, bindMarker(HEADER_CONTENT)))
             .where(column(MAILBOX_ID).isEqualTo(bindMarker(MAILBOX_ID)),
                 column(IMAP_UID).isEqualTo(bindMarker(IMAP_UID)))
             .build());
@@ -200,7 +211,6 @@ public class CassandraMessageIdDAO {
                 setColumn(FLAGGED, bindMarker(FLAGGED)),
                 setColumn(RECENT, bindMarker(RECENT)),
                 setColumn(SEEN, bindMarker(SEEN)),
-                setColumn(USER, bindMarker(USER)),
                 append(USER_FLAGS, bindMarker(ADDED_USERS_FLAGS)),
                 remove(USER_FLAGS, bindMarker(REMOVED_USERS_FLAGS)))
             .where(column(MAILBOX_ID).isEqualTo(bindMarker(MAILBOX_ID)),
@@ -297,7 +307,6 @@ public class CassandraMessageIdDAO {
                     RECENT,
                     SEEN,
                     FLAGGED,
-                    USER,
                     USER_FLAGS,
                     MOD_SEQ)
                 .where(column(MAILBOX_ID).isEqualTo(bindMarker(MAILBOX_ID)),
@@ -359,7 +368,6 @@ public class CassandraMessageIdDAO {
             .setBoolean(FLAGGED, flags.contains(Flag.FLAGGED))
             .setBoolean(RECENT, flags.contains(Flag.RECENT))
             .setBoolean(SEEN, flags.contains(Flag.SEEN))
-            .setBoolean(USER, flags.contains(Flag.USER))
             .setInstant(INTERNAL_DATE, metadata.getInternalDate().get().toInstant())
             .setInstant(SAVE_DATE, metadata.getSaveDate().map(Date::toInstant).orElse(null))
             .setInt(BODY_START_OCTET, Math.toIntExact(metadata.getBodyStartOctet().get()))
@@ -367,6 +375,17 @@ public class CassandraMessageIdDAO {
             .setString(HEADER_CONTENT, metadata.getHeaderContent().get().asString())
             .setExecutionProfile(writeProfile)
             .build());
+    }
+
+    public Mono<Void> updateDenormalizedFields(CassandraId mailboxId, MessageUid uid, Date internalDate,
+                                               int bodyStartOctet, long size, BlobId headerContent) {
+        return cassandraAsyncExecutor.executeVoid(updateDenormalizedFields.bind()
+            .setUuid(MAILBOX_ID, mailboxId.asUuid())
+            .setLong(IMAP_UID, uid.asLong())
+            .setInstant(INTERNAL_DATE, internalDate.toInstant())
+            .setInt(BODY_START_OCTET, bodyStartOctet)
+            .setLong(FULL_CONTENT_OCTETS, size)
+            .setString(HEADER_CONTENT, headerContent.asString()));
     }
 
     public Mono<Void> updateMetadata(ComposedMessageId composedMessageId, UpdatedFlags updatedFlags) {
@@ -408,11 +427,6 @@ public class CassandraMessageIdDAO {
             statementBuilder.setBoolean(SEEN, updatedFlags.isModifiedToSet(Flag.SEEN));
         } else {
             statementBuilder.unset(SEEN);
-        }
-        if (updatedFlags.isChanged(Flag.USER)) {
-            statementBuilder.setBoolean(USER, updatedFlags.isModifiedToSet(Flag.USER));
-        } else {
-            statementBuilder.unset(USER);
         }
         Sets.SetView<String> removedFlags = Sets.difference(
             ImmutableSet.copyOf(updatedFlags.getOldFlags().getUserFlags()),
@@ -647,7 +661,6 @@ public class CassandraMessageIdDAO {
             .setBoolean(FLAGGED, flags.contains(Flag.FLAGGED))
             .setBoolean(RECENT, flags.contains(Flag.RECENT))
             .setBoolean(SEEN, flags.contains(Flag.SEEN))
-            .setBoolean(USER, flags.contains(Flag.USER))
             .setInstant(INTERNAL_DATE, null)
             .setInt(BODY_START_OCTET, 0)
             .setLong(FULL_CONTENT_OCTETS, 0)
